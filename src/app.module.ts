@@ -10,6 +10,9 @@ import { ProjectsModule } from './modules/projects/projects.module';
 import { DocumentsModule } from './modules/documents/documents.module';
 import { CategoriesModule } from './modules/categories/categories.module';
 import { DecisionsModule } from './modules/decisions/decisions.module';
+import { ClassificationModule } from './modules/classification/classification.module';
+import { IngestionModule } from './modules/ingestion/ingestion.module';
+import { SearchModule } from './modules/search/search.module';
 import { EnvModule } from './shared/config/env.module';
 import { ENV, type Env } from './shared/config/env';
 
@@ -39,6 +42,9 @@ import { ENV, type Env } from './shared/config/env';
     DocumentsModule,
     CategoriesModule,
     DecisionsModule,
+    ClassificationModule,
+    IngestionModule,
+    SearchModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

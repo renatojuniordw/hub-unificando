@@ -13,10 +13,11 @@
     "start": "nest start",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
-    "start:prod": "node dist/main.js",
+    "start:prod": "node dist/src/main.js",
     "postinstall": "prisma generate",
-    "mcp:stdio": "node --import tsx src/mcp-stdio.ts",
-    "hub": "node --import tsx src/cli.ts",
+    "mcp:stdio": "node dist/src/mcp-stdio.js",
+    "hub": "node dist/src/cli.js",
+    "seed-categories": "node dist/scripts/seed-categories.js",
     "lint": "eslint \"{src,prisma,scripts}/**/*.ts\"",
     "lint:fix": "eslint \"{src,prisma,scripts}/**/*.ts\" --fix",
     "typecheck": "tsc --noEmit",
@@ -97,6 +98,9 @@
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
       "^.+\\.(t|j)s$": "ts-jest"
+    },
+    "moduleNameMapper": {
+      "^(\\.{1,2}/.*)\\.js$": "$1"
     },
     "collectCoverageFrom": [
       "**/*.(t|j)s"

@@ -36,4 +36,4 @@ EXPOSE 11020
 
 # The app serves the REST API + MCP on the same port; migrations run via
 # entrypoint on first boot (prisma migrate deploy + seed-categories).
-CMD ["node", "dist/main.js"]
+CMD ["node", "dist/src/main.js"]

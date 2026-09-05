@@ -1,0 +1,30 @@
+import { Module } from '@nestjs/common';
+import { EmbeddingModule } from '../../infra/embedding/embedding.module';
+import { ClassificationModule } from '../classification/classification.module';
+import { ChunkService } from './chunking/chunk.service';
+import { IngestionOrchestrator } from './orchestrator/ingestion-orchestrator.service';
+import { IngestionWriteRepository } from './repository/ingestion-write.repository';
+import { RegistryScanService } from './registry/registry-scan.service';
+import { ScannerService } from './scan/scanner.service';
+import { IngestionQueue } from './queue/ingestion.queue';
+
+@Module({
+  imports: [EmbeddingModule, ClassificationModule],
+  providers: [
+    ScannerService,
+    ChunkService,
+    RegistryScanService,
+    IngestionWriteRepository,
+    IngestionOrchestrator,
+    IngestionQueue,
+  ],
+  exports: [
+    ScannerService,
+    ChunkService,
+    RegistryScanService,
+    IngestionWriteRepository,
+    IngestionOrchestrator,
+    IngestionQueue,
+  ],
+})
+export class IngestionModule {}
