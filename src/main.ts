@@ -1,4 +1,5 @@
 import 'reflect-metadata';
+import type { Request, Response } from 'express';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
@@ -8,6 +9,7 @@ import * as packageJson from '../package.json';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
+import { McpHttpService } from './modules/mcp/mcp-http.service';
 import { validateEnv } from './shared/config/env';
 import { API_PREFIX, MCP_PATH } from './shared/constants';
 
@@ -47,6 +49,12 @@ async function bootstrap(): Promise<void> {
     .build();
   const document = SwaggerModule.createDocument(app, swaggerConfig);
   SwaggerModule.setup('api/docs', app, document);
+
+  // MCP Streamable HTTP — middleware puro no path /mcp (fora do prefixo /api/v1).
+  const mcpHttp = app.get(McpHttpService);
+  app.use(MCP_PATH, (req: Request, res: Response) => {
+    void mcpHttp.handle(req, res);
+  });
 
   await app.listen(env.PORT);
   app.get(Logger).log(`hub-unificando listening on ${env.PORT} (${env.NODE_ENV})`);
