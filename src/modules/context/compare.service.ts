@@ -50,7 +50,7 @@ export class CompareService {
     const contentOverlap = wordOverlap(aText, bText);
 
     const commonSections = commonHeadings(aChunks, bChunks);
-    const combined = Math.round(headingOverlap * 0.4 + contentOverlap * 0.6 * 1000) / 1000;
+    const combined = Math.round((headingOverlap * 0.4 + contentOverlap * 0.6) * 1000) / 1000;
 
     return {
       a: info(a, aChunks),
