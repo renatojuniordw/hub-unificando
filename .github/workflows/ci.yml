@@ -1,0 +1,111 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DATABASE_URL: postgresql://hub:hub@localhost:5432/hub_unificando
+  REDIS_URL: redis://localhost:6379
+
+jobs:
+  quality:
+    name: Lint + typecheck + build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run build
+
+  unit:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npm run test -- --ci
+
+  integration:
+    name: Integration (Testcontainers pgvector)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npm run test:integration -- --ci
+
+  ingest-smoke:
+    name: Ingest smoke (modelo real)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: hub
+          POSTGRES_PASSWORD: hub
+          POSTGRES_DB: hub_unificando
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U hub -d hub_unificando"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx prisma migrate deploy
+      - run: node --import tsx prisma/seed.ts
+      - run: npm run build
+      # Monta o ecossistema em /tmp/ecosystem (clona um projeto irmão) e
+      # ingere com o modelo real (multilingual-e5-base) como smoke.
+      - name: Clone sibling project
+        run: |
+          mkdir -p /tmp/ecosystem
+          git clone --depth 1 https://github.com/renatojuniordw/ui-unificando.git /tmp/ecosystem/ui-unificando
+      - name: Smoke ingestion (real model)
+        run: node dist/scripts/smoke-ingest.js ui-unificando
+        env:
+          HUB_SCAN_ROOT: /tmp/ecosystem
+          EMBEDDING_CACHE_DIR: /tmp/.transformers-cache
+      - name: Registry status
+        run: node dist/src/cli.js status
+
+  audit:
+    name: Security audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm audit --audit-level=high
