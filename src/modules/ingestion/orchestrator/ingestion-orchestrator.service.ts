@@ -9,7 +9,11 @@ import { ClassifierService } from '../../classification/classifier.service';
 import { ChunkService } from '../chunking/chunk.service';
 import { detectLanguage } from '../parsing/sections';
 import { ScannerService, type ScannedFile } from '../scan/scanner.service';
-import { IngestionWriteRepository, sha256, slugify } from '../repository/ingestion-write.repository';
+import {
+  IngestionWriteRepository,
+  sha256,
+  slugify,
+} from '../repository/ingestion-write.repository';
 import type { DocumentDraft, IngestOptions, IngestStats, IngestionScope } from '../ingestion.types';
 
 /**
@@ -70,17 +74,33 @@ export class IngestionOrchestrator {
     project: Project,
     options: IngestOptions,
   ): Promise<Omit<IngestStats, 'projects'>> {
-    const folderPath = join(this.env.HUB_SCAN_ROOT, project.folderPath);
-    const stats = { documents: 0, chunks: 0, embeddedChunks: 0, skipped: 0, errors: 0, errorsByPath: [] as string[] };
+    // Absolute folderPaths (tests/fixtures) win; relative ones resolve
+    // against HUB_SCAN_ROOT (production layout).
+    const folderPath = project.folderPath.startsWith('/')
+      ? project.folderPath
+      : join(this.env.HUB_SCAN_ROOT, project.folderPath);
+    const stats = {
+      documents: 0,
+      chunks: 0,
+      embeddedChunks: 0,
+      skipped: 0,
+      errors: 0,
+      errorsByPath: [] as string[],
+    };
     let files: ScannedFile[];
     try {
       files = await this.scanner.scanFolder(folderPath);
     } catch (error) {
-      this.logger.error(`Project "${project.slug}" scan failed`, error instanceof Error ? error.stack : undefined);
+      this.logger.error(
+        `Project "${project.slug}" scan failed`,
+        error instanceof Error ? error.stack : undefined,
+      );
       return { ...stats, errors: 1, errorsByPath: [project.folderPath] };
     }
 
-    this.logger.log(`Ingesting "${project.slug}" (${files.length} files, dryRun=${options.dryRun ?? false})`);
+    this.logger.log(
+      `Ingesting "${project.slug}" (${files.length} files, dryRun=${options.dryRun ?? false})`,
+    );
     for (const file of files) {
       try {
         await this.ingestFile(project, file, options, stats);
@@ -103,7 +123,14 @@ export class IngestionOrchestrator {
     project: Project,
     file: ScannedFile,
     options: IngestOptions,
-    stats: { documents: number; chunks: number; embeddedChunks: number; skipped: number; errors: number; errorsByPath: string[] },
+    stats: {
+      documents: number;
+      chunks: number;
+      embeddedChunks: number;
+      skipped: number;
+      errors: number;
+      errorsByPath: string[];
+    },
   ): Promise<void> {
     const mode = /\.mdx?$/i.test(file.relativePath) ? ('markdown' as const) : ('txt' as const);
     const chunks = this.chunkService.chunk(mode, file.content);
@@ -117,11 +144,14 @@ export class IngestionOrchestrator {
     }
 
     const firstHeading = chunks.find((chunk) => chunk.heading)?.heading;
-    const title = firstHeading ?? basename(file.relativePath).replace(/\.[^.]+$/, '') ?? file.relativePath;
+    const title =
+      firstHeading ?? basename(file.relativePath).replace(/\.[^.]+$/, '') ?? file.relativePath;
 
     // The title itself carries category signal (e.g. "SEO — Unificando UI").
-    const documentText =
-      `${title}\n\n${chunks.map((chunk) => chunk.content).join('\n\n')}`.slice(0, 3000);
+    const documentText = `${title}\n\n${chunks.map((chunk) => chunk.content).join('\n\n')}`.slice(
+      0,
+      3000,
+    );
     const classification = options.dryRun
       ? { category: 'general', categories: ['general'] }
       : await this.classifier.classify(documentText);
@@ -149,7 +179,12 @@ export class IngestionOrchestrator {
       sourceSha,
       charCount: file.content.length,
       tokenEstimate: Math.ceil(file.content.length / 4),
-      metadata: { headings: chunks.map((chunk) => chunk.heading).filter((h): h is string => Boolean(h)).slice(0, 10) },
+      metadata: {
+        headings: chunks
+          .map((chunk) => chunk.heading)
+          .filter((h): h is string => Boolean(h))
+          .slice(0, 10),
+      },
     };
 
     if (options.dryRun) {
@@ -164,7 +199,9 @@ export class IngestionOrchestrator {
         index,
         heading: chunk.heading,
         content: chunk.content,
-        anchor: chunk.heading ? `${file.relativePath}#${slugify(chunk.heading)}` : file.relativePath,
+        anchor: chunk.heading
+          ? `${file.relativePath}#${slugify(chunk.heading)}`
+          : file.relativePath,
         tokenCount: Math.ceil(chunk.content.length / 4),
         contentHash: sha256(chunk.content),
       })),

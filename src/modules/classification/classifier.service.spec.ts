@@ -91,7 +91,10 @@ describe('ClassifierService', () => {
     // No keyword hit; semantic embedding points at database prototype (cos=1).
     const moduleRef = await buildModule(
       [1, 0],
-      [{ slug: 'database', vector: '[1,0]' }, { slug: 'general', vector: '[0,0]' }],
+      [
+        { slug: 'database', vector: '[1,0]' },
+        { slug: 'general', vector: '[0,0]' },
+      ],
     );
     const service = moduleRef.get(ClassifierService);
     const result = await service.classify('ferramenta de banco relacional com índices e schemas');
@@ -103,7 +106,10 @@ describe('ClassifierService', () => {
     // Zero embeddings + non-matching prototypes => cosine 0 everywhere.
     const moduleRef = await buildModule(
       [0, 0],
-      [{ slug: 'database', vector: '[0,0]' }, { slug: 'api', vector: '[0,0]' }],
+      [
+        { slug: 'database', vector: '[0,0]' },
+        { slug: 'api', vector: '[0,0]' },
+      ],
     );
     const service = moduleRef.get(ClassifierService);
     const result = await service.classify('qualquer texto sem contexto');

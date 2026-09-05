@@ -5,11 +5,11 @@ import { PrismaService } from '../../../infra/prisma/prisma.service';
 import { ENV, type Env } from '../../../shared/config/env';
 import { SCAN_EXCLUDED_DIRS } from '../../../shared/constants';
 
-export interface StackEntry {
+export type StackEntry = {
   name: string;
   version: string;
   role: string;
-}
+};
 
 /**
  * Refreshes the project registry from the real folder layout under
@@ -55,7 +55,7 @@ export class RegistryScanService {
           description: pkg.description ?? '',
           repoUrl: pkg.repoUrl,
           folderPath: entry.name,
-          stack: pkg.stack as unknown as object,
+          stack: pkg.stack,
           tags: [pkg.name ?? entry.name],
           sourceType: 'local',
         },
@@ -84,16 +84,14 @@ export class RegistryScanService {
       };
       const stack = resolveStack(pkg.dependencies ?? {}, pkg.devDependencies ?? {});
       const repoUrl =
-        typeof pkg.repository === 'string'
-          ? pkg.repository
-          : pkg.repository?.url ?? undefined;
+        typeof pkg.repository === 'string' ? pkg.repository : (pkg.repository?.url ?? undefined);
       await this.prisma.project.update({
         where: { slug },
         data: {
           name: pkg.name ?? undefined,
           description: pkg.description ?? undefined,
           repoUrl,
-          stack: stack as unknown as object,
+          stack,
         },
       });
       return true;
@@ -116,9 +114,7 @@ export class RegistryScanService {
         devDependencies?: Record<string, string>;
       };
       const repoUrl =
-        typeof pkg.repository === 'string'
-          ? pkg.repository
-          : pkg.repository?.url ?? undefined;
+        typeof pkg.repository === 'string' ? pkg.repository : (pkg.repository?.url ?? undefined);
       return {
         name: pkg.name,
         description: pkg.description,
@@ -140,19 +136,40 @@ export function resolveStack(
   const all = { ...dependencies, ...devDependencies };
   for (const [name, version] of Object.entries(all)) {
     if (!version) continue;
-    stack.push({ name, version: version.replace(/^[\^~]/, ''), role: roleFor(name, name in devDependencies) });
+    stack.push({
+      name,
+      version: version.replace(/^[\^~]/, ''),
+      role: roleFor(name, name in devDependencies),
+    });
   }
   return stack.sort((a, b) => a.name.localeCompare(b.name));
 }
 
 function roleFor(name: string, isDev: boolean): string {
   if (/^(next|nuxt|astro|sveltekit)$/.test(name) || name.startsWith('@vitejs')) return 'framework';
-  if (['react', 'react-dom', 'vue', 'svelte', 'vite', 'solid-js'].includes(name)) return 'framework';
-  if (/(tailwind|mui|emotion|framer-motion|radix|shadcn|styled-components|lucide|recharts|dnd-kit|react-helmet)/.test(name)) return 'ui';
-  if (/(^prisma$|@prisma|pg$|postgres|knex|typeorm|mongodb|drizzle|ioredis|redis|idb|fake-indexeddb)/.test(name)) return 'data';
-  if (/(openai|@ai-sdk|^ai$|transformers|langchain|anthropic|google-genai|gemini)/.test(name)) return 'ai';
+  if (['react', 'react-dom', 'vue', 'svelte', 'vite', 'solid-js'].includes(name))
+    return 'framework';
+  if (
+    /(tailwind|mui|emotion|framer-motion|radix|shadcn|styled-components|lucide|recharts|dnd-kit|react-helmet)/.test(
+      name,
+    )
+  )
+    return 'ui';
+  if (
+    /(^prisma$|@prisma|pg$|postgres|knex|typeorm|mongodb|drizzle|ioredis|redis|idb|fake-indexeddb)/.test(
+      name,
+    )
+  )
+    return 'data';
+  if (/(openai|@ai-sdk|^ai$|transformers|langchain|anthropic|google-genai|gemini)/.test(name))
+    return 'ai';
   if (/(pdf|canvas|sharp|docx|@react-pdf|archiver|xlsx|iconv-lite)/.test(name)) return 'native';
-  if (/(playwright|vitest|jest|eslint|typescript|tsx|prettier|@testing-library|jsdom|eslint-config|@types\/)/.test(name)) return 'dev';
+  if (
+    /(playwright|vitest|jest|eslint|typescript|tsx|prettier|@testing-library|jsdom|eslint-config|@types\/)/.test(
+      name,
+    )
+  )
+    return 'dev';
   if (/(modelcontextprotocol|^mcp)/.test(name)) return 'mcp';
   if (isDev) return 'dev';
   return 'runtime';

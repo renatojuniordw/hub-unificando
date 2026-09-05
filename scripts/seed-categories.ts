@@ -11,7 +11,9 @@ import { CategoryPrototypeSeeder } from '../src/modules/classification/prototype
 
 async function main(): Promise<void> {
   const force = process.argv.includes('--force');
-  const app = await NestFactory.createApplicationContext(AppModule, { logger: ['log', 'warn', 'error'] });
+  const app = await NestFactory.createApplicationContext(AppModule, {
+    logger: ['log', 'warn', 'error'],
+  });
   try {
     const seeder = app.get(CategoryPrototypeSeeder);
     const result = await seeder.run(force);

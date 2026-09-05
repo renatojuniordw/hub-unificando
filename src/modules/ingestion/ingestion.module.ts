@@ -7,9 +7,11 @@ import { IngestionWriteRepository } from './repository/ingestion-write.repositor
 import { RegistryScanService } from './registry/registry-scan.service';
 import { ScannerService } from './scan/scanner.service';
 import { IngestionQueue } from './queue/ingestion.queue';
+import { IngestionController } from './ingestion.controller';
 
 @Module({
   imports: [EmbeddingModule, ClassificationModule],
+  controllers: [IngestionController],
   providers: [
     ScannerService,
     ChunkService,

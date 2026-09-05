@@ -33,9 +33,10 @@ export function parseMarkdownSections(markdown: string): ParsedSection[] {
     if (match) {
       flush();
       const level = match[1].length;
+      // Keep the ancestor headings (levels < level) and append this one,
+      // so the lineage is always contiguous: ["Arquitetura", "Módulos"].
       headingLineage = headingLineage.slice(0, level - 1);
-      headingLineage[level - 1] = match[2].trim();
-      headingLineage = headingLineage.slice(0, level);
+      headingLineage.push(match[2].trim());
       continue;
     }
     buffer.push(line);

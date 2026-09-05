@@ -13,6 +13,7 @@ import { DecisionsModule } from './modules/decisions/decisions.module';
 import { ClassificationModule } from './modules/classification/classification.module';
 import { IngestionModule } from './modules/ingestion/ingestion.module';
 import { SearchModule } from './modules/search/search.module';
+import { ContextModule } from './modules/context/context.module';
 import { EnvModule } from './shared/config/env.module';
 import { ENV, type Env } from './shared/config/env';
 
@@ -45,6 +46,7 @@ import { ENV, type Env } from './shared/config/env';
     ClassificationModule,
     IngestionModule,
     SearchModule,
+    ContextModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

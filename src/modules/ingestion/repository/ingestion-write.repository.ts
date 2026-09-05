@@ -82,7 +82,7 @@ export class IngestionWriteRepository {
 
   async createJob(kind: string, scope: object): Promise<{ id: string }> {
     const job = await this.prisma.ingestionJob.create({
-      data: { kind, status: 'queued', scope: scope as object },
+      data: { kind, status: 'queued', scope },
     });
     return { id: job.id };
   }

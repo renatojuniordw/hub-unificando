@@ -6,6 +6,7 @@ import { ENV, type Env } from '../../../shared/config/env';
 import { INGESTION_QUEUE } from '../../../shared/constants';
 import type { IngestOptions, IngestionScope } from '../ingestion.types';
 import { IngestionOrchestrator } from '../orchestrator/ingestion-orchestrator.service';
+import { IngestionWriteRepository } from '../repository/ingestion-write.repository';
 
 export interface EnqueuedJob {
   queueId: string | undefined;
@@ -13,9 +14,10 @@ export interface EnqueuedJob {
 
 /**
  * BullMQ-backed ingestion queue for the write API (POST /ingest/jobs).
- * The worker runs the same orchestrator used by the CLI. BullMQ requires a
- * dedicated ioredis connection with maxRetriesPerRequest=null (blocking).
- * When Redis is disabled the queue stays inert and callers get a 503.
+ * The worker runs the same orchestrator used by the CLI and mirrors the job
+ * lifecycle into the ingestion_jobs table. BullMQ requires a dedicated
+ * ioredis connection with maxRetriesPerRequest=null (blocking commands).
+ * When Redis is disabled the queue stays inert and callers get a 400.
  */
 @Injectable()
 export class IngestionQueue implements OnModuleDestroy {
@@ -26,6 +28,7 @@ export class IngestionQueue implements OnModuleDestroy {
 
   constructor(
     private readonly redis: RedisService,
+    private readonly writeRepo: IngestionWriteRepository,
     orchestrator: IngestionOrchestrator,
     @Inject(ENV) env: Env,
   ) {
@@ -40,9 +43,34 @@ export class IngestionQueue implements OnModuleDestroy {
     this.worker = new Worker(
       INGESTION_QUEUE,
       async (job) => {
-        const data = job.data as { scope: IngestionScope; options: IngestOptions };
+        const data = job.data as { scope: IngestionScope; options: IngestOptions; jobId?: string };
+        if (data.jobId) {
+          await this.writeRepo.markJobStarted(data.jobId);
+        }
         this.logger.log(`Processing ingestion job ${job.id}`);
-        return orchestrator.ingest(data.scope, data.options);
+        try {
+          const stats = await orchestrator.ingest(data.scope, data.options);
+          if (data.jobId) {
+            const status = stats.errors > 0 ? 'partial' : 'done';
+            await this.writeRepo.finishJob(
+              data.jobId,
+              status,
+              stats,
+              stats.errors > 0 ? `${stats.errors} file(s) failed` : null,
+            );
+          }
+          return stats;
+        } catch (error) {
+          if (data.jobId) {
+            await this.writeRepo.finishJob(
+              data.jobId,
+              'failed',
+              null,
+              error instanceof Error ? error.message : 'unknown',
+            );
+          }
+          throw error;
+        }
       },
       { connection: this.connection, concurrency: 1 },
     );
@@ -51,15 +79,23 @@ export class IngestionQueue implements OnModuleDestroy {
     });
   }
 
-  async enqueue(scope: IngestionScope, options: IngestOptions): Promise<EnqueuedJob> {
+  async enqueue(
+    scope: IngestionScope,
+    options: IngestOptions,
+    jobId?: string,
+  ): Promise<EnqueuedJob> {
     if (!this.queue) {
       throw new Error('REDIS_DISABLED');
     }
-    const job = await this.queue.add('ingest', { scope, options }, { removeOnComplete: true });
+    const job = await this.queue.add(
+      'ingest',
+      { scope, options, jobId },
+      { removeOnComplete: true },
+    );
     return { queueId: job.id };
   }
 
-  async isEnabled(): Promise<boolean> {
+  isEnabled(): boolean {
     return this.queue !== null;
   }
 

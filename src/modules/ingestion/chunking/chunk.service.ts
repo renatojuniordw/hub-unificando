@@ -39,17 +39,18 @@ export class ChunkService {
       const trimmed = section.content;
       if (trimmed.length === 0) continue;
 
+      // Flush first whenever the section would overflow the current buffer.
+      if (bufferSize > 0 && bufferSize + trimmed.length > this.maxChars) {
+        flush();
+      }
+
       if (trimmed.length > this.maxChars && bufferSize === 0) {
-        // Single oversized section: split by paragraphs with overlap.
+        // Oversized section: split on paragraph boundaries with overlap.
         const parts = this.splitLongSection(trimmed);
         for (const part of parts) {
           chunks.push({ heading, content: part });
         }
         continue;
-      }
-
-      if (bufferSize > 0 && bufferSize + trimmed.length > this.maxChars) {
-        flush();
       }
 
       if (bufferSize === 0) {

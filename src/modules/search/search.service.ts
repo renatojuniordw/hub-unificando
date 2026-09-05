@@ -1,5 +1,4 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { Redis } from 'ioredis';
 import { PrismaService } from '../../infra/prisma/prisma.service';
 import { RedisService } from '../../infra/redis/redis.service';
 import { EmbeddingProvider } from '../../infra/embedding/embedding.provider';
@@ -98,9 +97,7 @@ export class SearchService {
 
     const weights = FUSION[strategy];
     const ranked = this.fuse(vectorHits, keywordHits, trigramHits, weights);
-    const hits = ranked
-      .slice(0, limit)
-      .map((entry) => this.toHit(entry));
+    const hits = ranked.slice(0, limit).map((entry) => this.toHit(entry));
 
     const response: SearchResponse = { query: query.q, strategy, hits, total: ranked.length };
     await this.writeCache(cacheKey, response);

@@ -10,6 +10,9 @@ import { IngestionOrchestrator } from './modules/ingestion/orchestrator/ingestio
 import { countEmbeddedChunks } from './infra/vector/vector.sql';
 import { PrismaService } from './infra/prisma/prisma.service';
 import { SearchService } from './modules/search/search.service';
+import { ContextAssemblerService } from './modules/context/context-assembler.service';
+import { CompareService } from './modules/context/compare.service';
+import { SummaryService } from './modules/context/summary.service';
 
 async function createContext() {
   return NestFactory.createApplicationContext(AppModule, {
@@ -37,7 +40,9 @@ async function main(): Promise<void> {
           prisma.chunk.count(),
           countEmbeddedChunks(prisma),
         ]);
-        console.log(JSON.stringify({ projects, documents, chunks, embeddedChunks: embedded }, null, 2));
+        console.log(
+          JSON.stringify({ projects, documents, chunks, embeddedChunks: embedded }, null, 2),
+        );
       } finally {
         await app.close();
       }
@@ -131,6 +136,73 @@ async function main(): Promise<void> {
         }
       },
     );
+
+  program
+    .command('context')
+    .description('Export an LLM context package for a project')
+    .requiredOption('--project <slug>', 'project slug')
+    .option('--topic <text>', 'focused topic')
+    .option('--maxTokens <n>', 'token budget (default 6000)', '6000')
+    .option('--save <file>', 'write the package to a markdown file')
+    .action(
+      async (opts: { project: string; topic?: string; maxTokens?: string; save?: string }) => {
+        const app = await createContext();
+        try {
+          const assembler = app.get(ContextAssemblerService);
+          const pkg = await assembler.export({
+            projectSlug: opts.project,
+            topic: opts.topic,
+            maxTokens: Number(opts.maxTokens ?? 6000),
+          });
+          if (opts.save) {
+            const { writeFile } = await import('node:fs/promises');
+            const markdown = pkg.sections
+              .map((section) => `# ${section.title}\n\n${section.content}`)
+              .join('\n\n---\n\n');
+            await writeFile(
+              opts.save,
+              `# Contexto — ${pkg.meta.projectSlug}\n\n${markdown}\n`,
+              'utf8',
+            );
+            console.log(JSON.stringify({ saved: opts.save, totalTokens: pkg.meta.totalTokens }));
+          } else {
+            console.log(JSON.stringify(pkg, null, 2));
+          }
+        } finally {
+          await app.close();
+        }
+      },
+    );
+
+  program
+    .command('summary')
+    .description('Factual project summary')
+    .requiredOption('--project <slug>', 'project slug')
+    .action(async (opts: { project: string }) => {
+      const app = await createContext();
+      try {
+        const summary = app.get(SummaryService);
+        console.log(JSON.stringify(await summary.summarize(opts.project), null, 2));
+      } finally {
+        await app.close();
+      }
+    });
+
+  program
+    .command('compare')
+    .description('Compare two documents by structure and content overlap')
+    .requiredOption('--a <path>', 'document A path')
+    .requiredOption('--b <path>', 'document B path')
+    .option('--project <slug>', 'project scope')
+    .action(async (opts: { a: string; b: string; project?: string }) => {
+      const app = await createContext();
+      try {
+        const compare = app.get(CompareService);
+        console.log(JSON.stringify(await compare.compare(opts.a, opts.b, opts.project), null, 2));
+      } finally {
+        await app.close();
+      }
+    });
 
   program
     .command('classify')

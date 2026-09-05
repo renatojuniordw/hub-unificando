@@ -36,7 +36,9 @@ export class ScannerService {
     try {
       entries = await readdir(dir, { withFileTypes: true });
     } catch (error) {
-      this.logger.warn(`Skipping unreadable dir ${dir}: ${error instanceof Error ? error.message : 'error'}`);
+      this.logger.warn(
+        `Skipping unreadable dir ${dir}: ${error instanceof Error ? error.message : 'error'}`,
+      );
       return;
     }
     entries.sort((a, b) => a.name.localeCompare(b.name));
@@ -58,7 +60,9 @@ export class ScannerService {
         const content = await readFile(absolutePath, 'utf8');
         out.push({ relativePath, absolutePath, content, size: content.length });
       } catch (error) {
-        this.logger.warn(`Skipping unreadable file ${absolutePath}: ${error instanceof Error ? error.message : 'error'}`);
+        this.logger.warn(
+          `Skipping unreadable file ${absolutePath}: ${error instanceof Error ? error.message : 'error'}`,
+        );
       }
     }
   }

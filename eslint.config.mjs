@@ -26,7 +26,7 @@ export default tseslint.config(
             'prisma/seed/registry.ts',
             'prisma.config.ts',
             'scripts/smoke-ingest.ts',
-            'scripts/classified.ts',
+            'scripts/seed-categories.ts',
           ],
         },
         tsconfigRootDir: import.meta.dirname,
