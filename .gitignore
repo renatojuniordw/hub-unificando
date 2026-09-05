@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+
+# Tests / coverage
+coverage/
+playwright-report/
+test-results/
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Runtime caches
+.tmp/
+tmp/
+*.log
+npm-debug.log*
+
+# Prisma
+prisma/*.db
+prisma/*.db-journal
+src/generated/
+
+# Transformers on-device model cache
+.transformers-cache/
+
+# Context exports written by `hub context --save`
+context-*.md
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp

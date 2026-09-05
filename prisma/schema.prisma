@@ -1,0 +1,139 @@
+// ---------------------------------------------------------------------------
+// hub-unificando — Prisma schema
+// PostgreSQL 16 + pgvector. Vector/tsvector columns are Unsupported and are
+// only ever written/read via raw SQL (see src/infra/vector/* and the search
+// / embedding repositories). Full data model documented in docs/DATA-MODEL.md.
+// ---------------------------------------------------------------------------
+
+generator client {
+  provider        = "prisma-client"
+  output          = "../src/generated/prisma"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  extensions = [vector]
+}
+
+// Registry of Unificando ecosystem projects (source of truth consumed by the
+// REST API, agents via MCP, and the context assembler).
+model Project {
+  slug           String    @id
+  name           String
+  description    String
+  repoUrl        String?
+  folderPath     String // absolute, or relative to the scan root
+  stack          Json? // [{ name, version, role }] — derived from package.json
+  tags           String[]
+  sourceType     String @default("local") // "local" | "git"
+  enabled        Boolean   @default(true)
+  lastIngestedAt DateTime?
+  metadata       Json?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  documents Document[]
+  decisions Decision[]
+
+  @@map("projects")
+}
+
+// A single indexed knowledge file (markdown, txt, ...). Text lives in chunks;
+// the document row carries the title/summary/categories pointing at them.
+model Document {
+  id            String   @id @default(cuid())
+  projectSlug   String
+  project       Project  @relation(fields: [projectSlug], references: [slug], onDelete: Cascade)
+  path          String // path relative to the project folder (ex: docs/design-system.md)
+  title         String
+  summary       String?
+  lang          String? // "pt-BR", "en", ...
+  category      String // primary category slug
+  categories    String[] // multi-label
+  docType       String @default("markdown") // "markdown" | "txt" | "json" | "code" | ...
+  contentKind   String? // DESIGN_SYSTEM, ARCHITECTURE, API, README, PROMPT, ...
+  sourceSha     String // sha256 of the file content (dedupe)
+  charCount     Int
+  tokenEstimate Int?
+  metadata      Json?
+  ingestedAt    DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  chunks Chunk[]
+
+  @@unique([projectSlug, path])
+  @@index([projectSlug, category])
+  @@map("documents")
+}
+
+// A searchable piece of a document (markdown-heading-aware chunks).
+model Chunk {
+  id          String   @id @default(cuid())
+  documentId  String
+  document    Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  index       Int // order within the document
+  heading     String? // heading lineage, ex: "## Arquitetura > ### Módulos"
+  content     String
+  contentHash String
+  tokenCount  Int
+  anchor      String? // ex: "doc.md#arquitetura"
+  metadata    Json?
+  embedding   Unsupported("vector(768)")? // HNSW index (vector_cosine_ops) in migration
+
+  @@index([documentId])
+  @@index([contentHash])
+  @@map("chunks")
+}
+
+// Content taxonomy. Categories are DB records: keywords drive the
+// deterministic rule pass, prototype is the embedding of an anchor text used
+// by the semantic pass (see docs/CLASSIFICATION.md).
+model Category {
+  slug        String   @id
+  name        String
+  description String
+  keywords    String[] // deterministic rules
+  prototype   Unsupported("vector(768)")? // embedding of the category anchor text
+  parentSlug  String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  @@index([parentSlug])
+  @@map("categories")
+}
+
+// Architecture Decision Records (ADRs) of the ecosystem.
+model Decision {
+  id          String   @id @default(cuid())
+  projectSlug String
+  project     Project  @relation(fields: [projectSlug], references: [slug], onDelete: Cascade)
+  title       String
+  date        DateTime @default(now())
+  status      String @default("accepted") // "accepted" | "superseded" | "proposed"
+  summary     String
+  content     String // full markdown of the ADR (when a file exists)
+  sourcePath  String? // ex: docs/decisions/001-fila.md
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([projectSlug, status])
+  @@map("decisions")
+}
+
+// Bookkeeping of ingestion jobs (also enqueued in BullMQ/Redis).
+model IngestionJob {
+  id         String   @id @default(cuid())
+  kind       String // "scan" | "ingest" | "reindex" | "classify"
+  status     String @default("queued") // "queued" | "running" | "done" | "failed" | "partial"
+  scope      Json? // { projectSlug?, path?, strategy? }
+  stats      Json? // { projects, documents, chunks, errors }
+  error      String?
+  startedAt  DateTime?
+  finishedAt DateTime?
+  createdAt  DateTime @default(now())
+
+  @@index([status, createdAt])
+  @@map("ingestion_jobs")
+}

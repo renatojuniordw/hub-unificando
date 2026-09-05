@@ -1,0 +1,76 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: hub-unificando-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: hub
+      POSTGRES_PASSWORD: hub
+      POSTGRES_DB: hub_unificando
+    ports:
+      - "11022:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hub -d hub_unificando"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: hub-unificando-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "11023:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: hub-unificando-app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: "11020"
+      DATABASE_URL: postgresql://hub:hub@db:5432/hub_unificando
+      REDIS_URL: redis://redis:6379
+      REDIS_ENABLED: "true"
+      HUB_SCAN_ROOT: /workspace/projects
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-Xenova/multilingual-e5-base}
+      EMBEDDING_DIMS: ${EMBEDDING_DIMS:-768}
+      EMBEDDING_CACHE_DIR: /tmp/.transformers-cache
+      ADMIN_API_KEY: ${ADMIN_API_KEY:-}
+      MCP_API_KEY: ${MCP_API_KEY:-}
+      MCP_ENABLE_JSON_RESPONSE: ${MCP_ENABLE_JSON_RESPONSE:-false}
+      MCP_SESSION_TTL_MIN: ${MCP_SESSION_TTL_MIN:-60}
+      MCP_RATE_LIMIT: ${MCP_RATE_LIMIT:-120}
+    ports:
+      - "11020:11020"
+    volumes:
+      - transformers-cache:/tmp/.transformers-cache
+      # Mount the sibling projects read-only so the Hub can ingest them in Docker.
+      - /Users/renatobezerra/Developer/Unificando Hub:/workspace/projects:ro
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:11020/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
+  redisdata:
+  transformers-cache:
