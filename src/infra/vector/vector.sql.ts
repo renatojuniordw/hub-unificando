@@ -100,7 +100,10 @@ export function vectorSearch(
   embedding: number[],
   filters: VectorSearchFilters,
 ): Promise<ChunkHitRow[]> {
-  const params: unknown[] = [embedding];
+  // pg binds JS arrays as Postgres arrays; vector column needs a literal like
+  // '[0.006,0.043,...]' — same string format used by upsertChunkEmbeddings.
+  const vectorLiteral = `[${embedding.map((v) => v.toFixed(6)).join(',')}]`;
+  const params: unknown[] = [vectorLiteral];
   const scoreExpr = '1 - (c.embedding <=> $1::vector)';
   const { where, minScoreClause, limitIndex } = filterSql(filters, params, scoreExpr, 2);
   const query = `
