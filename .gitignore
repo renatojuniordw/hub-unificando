@@ -32,6 +32,9 @@ src/generated/
 # Context exports written by `hub context --save`
 context-*.md
 
+# Knowledge bundle (artifact do deploy VPS)
+knowledge-bundle.tar.gz
+
 # Editor / OS
 .DS_Store
 .idea/

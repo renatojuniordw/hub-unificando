@@ -26,6 +26,57 @@ export interface ProjectSummary {
 export class SummaryService {
   constructor(private readonly prisma: PrismaService) {}
 
+  /** Contextual summary of a single document (REST /summary?target=document). */
+  async summarizeDocument(input: { id?: string; path?: string; projectSlug?: string }): Promise<{
+    document: {
+      id: string;
+      title: string;
+      path: string;
+      projectSlug: string;
+      category: string;
+      categories: string[];
+      contentKind: string | null;
+      summary: string | null;
+    };
+    counts: { chunks: number };
+    headings: string[];
+  }> {
+    const document = input.id
+      ? await this.prisma.document.findUnique({ where: { id: input.id } })
+      : input.path
+        ? await this.prisma.document.findFirst({
+            where: { path: input.path, projectSlug: input.projectSlug ?? undefined },
+          })
+        : null;
+    if (!document) {
+      throw new NotFoundException(
+        input.id ? `Document "${input.id}" not found` : `Document "${input.path}" not found`,
+      );
+    }
+    const [chunkCount, chunkHeadings] = await Promise.all([
+      this.prisma.chunk.count({ where: { documentId: document.id } }),
+      this.prisma.chunk.findMany({
+        where: { documentId: document.id, heading: { not: null } },
+        orderBy: { index: 'asc' },
+        select: { heading: true },
+      }),
+    ]);
+    return {
+      document: {
+        id: document.id,
+        title: document.title,
+        path: document.path,
+        projectSlug: document.projectSlug,
+        category: document.category,
+        categories: document.categories,
+        contentKind: document.contentKind,
+        summary: document.summary,
+      },
+      counts: { chunks: chunkCount },
+      headings: chunkHeadings.map((chunk) => chunk.heading as string),
+    };
+  }
+
   async summarize(projectSlug: string): Promise<ProjectSummary> {
     const project = await this.prisma.project.findUnique({ where: { slug: projectSlug } });
     if (!project) {

@@ -8,11 +8,13 @@ import { CategoryPrototypeSeeder } from './modules/classification/prototype-seed
 import { RegistryScanService } from './modules/ingestion/registry/registry-scan.service';
 import { IngestionOrchestrator } from './modules/ingestion/orchestrator/ingestion-orchestrator.service';
 import { countEmbeddedChunks } from './infra/vector/vector.sql';
+import { RedisService } from './infra/redis/redis.service';
 import { PrismaService } from './infra/prisma/prisma.service';
 import { SearchService } from './modules/search/search.service';
 import { ContextAssemblerService } from './modules/context/context-assembler.service';
 import { CompareService } from './modules/context/compare.service';
 import { SummaryService } from './modules/context/summary.service';
+import { KnowledgeBundleService } from './modules/ingestion/knowledge/knowledge-bundle.service';
 
 async function createContext() {
   return NestFactory.createApplicationContext(AppModule, {
@@ -63,24 +65,92 @@ async function main(): Promise<void> {
     });
 
   program
+    .command('list-projects')
+    .description('List the project registry (slug, name, enabled, counts)')
+    .action(async () => {
+      const app = await createContext();
+      try {
+        const prisma = app.get(PrismaService);
+        const projects = await prisma.project.findMany({
+          orderBy: { name: 'asc' },
+          select: {
+            slug: true,
+            name: true,
+            description: true,
+            repoUrl: true,
+            enabled: true,
+            lastIngestedAt: true,
+            _count: { select: { documents: true } },
+          },
+        });
+        console.log(JSON.stringify(projects, null, 2));
+      } finally {
+        await app.close();
+      }
+    });
+
+  program
+    .command('health')
+    .description('Liveness/readiness of the local dependencies (db, redis)')
+    .action(async () => {
+      const app = await createContext();
+      try {
+        const prisma = app.get(PrismaService);
+        const dbOk = await prisma
+          .$queryRawUnsafe('SELECT 1')
+          .then(() => true)
+          .catch(() => false);
+        const redisClient = app.get(RedisService).get();
+        const redisOk = redisClient
+          ? await redisClient
+              .ping()
+              .then((pong) => pong === 'PONG')
+              .catch(() => false)
+          : true;
+        console.log(
+          JSON.stringify(
+            {
+              status: dbOk && redisOk ? 'ok' : 'degraded',
+              checks: { db: dbOk, redis: redisOk },
+            },
+            null,
+            2,
+          ),
+        );
+      } finally {
+        await app.close();
+      }
+    });
+
+  program
     .command('ingest')
     .description('Ingest one project (slug) or all enabled projects')
     .argument('[project]', 'project slug (default: all enabled)')
     .option('--force', 're-index even when the file hash is unchanged')
     .option('--dry-run', 'scan + parse only, no writes, no embeddings')
-    .action(async (project: string | undefined, opts: { force?: boolean; dryRun?: boolean }) => {
-      const app = await createContext();
-      try {
-        const orchestrator = app.get(IngestionOrchestrator);
-        const stats = await orchestrator.ingest(
-          { projectSlug: project },
-          { force: opts.force ?? false, dryRun: opts.dryRun ?? false },
-        );
-        console.log(JSON.stringify(stats, null, 2));
-      } finally {
-        await app.close();
-      }
-    });
+    .option('--reset', 'delete indexed docs of the target project(s) first')
+    .action(
+      async (
+        project: string | undefined,
+        opts: { force?: boolean; dryRun?: boolean; reset?: boolean },
+      ) => {
+        const app = await createContext();
+        try {
+          const orchestrator = app.get(IngestionOrchestrator);
+          const stats = await orchestrator.ingest(
+            { projectSlug: project },
+            {
+              force: opts.force ?? false,
+              dryRun: opts.dryRun ?? false,
+              reset: opts.reset ?? false,
+            },
+          );
+          console.log(JSON.stringify(stats, null, 2));
+        } finally {
+          await app.close();
+        }
+      },
+    );
 
   program
     .command('seed-categories')
@@ -98,12 +168,28 @@ async function main(): Promise<void> {
     });
 
   program
+    .command('reindex-embeddings')
+    .description('Recompute chunk embeddings in place (model change)')
+    .option('--project <slug>', 'project slug (default: all)')
+    .action(async (opts: { project?: string }) => {
+      const app = await createContext();
+      try {
+        const orchestrator = app.get(IngestionOrchestrator);
+        const result = await orchestrator.reindexEmbeddings(opts.project);
+        console.log(JSON.stringify(result, null, 2));
+      } finally {
+        await app.close();
+      }
+    });
+
+  program
     .command('search')
     .description('Hybrid search (vector + keyword + fuzzy, RRF)')
     .argument('<query>', 'search query')
     .option('--project <slug>', 'restrict to a project')
     .option('--category <slug>', 'restrict to a category')
-    .option('--limit <n>', 'number of hits (default 10)', '10')
+    .option('--top <n>', 'number of hits (default 10)')
+    .option('--limit <n>', 'alias for --top')
     .option('--strategy <name>', 'balanced | recall | precision', 'balanced')
     .action(
       async (
@@ -111,6 +197,7 @@ async function main(): Promise<void> {
         opts: {
           project?: string;
           category?: string;
+          top?: string;
           limit?: string;
           strategy?: 'balanced' | 'recall' | 'precision';
         },
@@ -118,11 +205,12 @@ async function main(): Promise<void> {
         const app = await createContext();
         try {
           const search = app.get(SearchService);
+          const limit = Number(opts.top ?? opts.limit ?? 10);
           const result = await search.search({
             q: query,
             projectSlug: opts.project,
             category: opts.category,
-            limit: Number(opts.limit ?? 10),
+            limit,
             strategy: opts.strategy ?? 'balanced',
           });
           for (const hit of result.hits) {
@@ -176,13 +264,24 @@ async function main(): Promise<void> {
 
   program
     .command('summary')
-    .description('Factual project summary')
-    .requiredOption('--project <slug>', 'project slug')
-    .action(async (opts: { project: string }) => {
+    .description('Factual summary of a project or a single document')
+    .option('--project <slug>', 'project slug')
+    .option('--target <project|document>', 'summary target (default: project)', 'project')
+    .option('--id <id>', 'document id (target=document)')
+    .option('--path <path>', 'document path (target=document)')
+    .action(async (opts: { project?: string; target?: string; id?: string; path?: string }) => {
       const app = await createContext();
       try {
         const summary = app.get(SummaryService);
-        console.log(JSON.stringify(await summary.summarize(opts.project), null, 2));
+        const result =
+          opts.target === 'document'
+            ? await summary.summarizeDocument({
+                id: opts.id,
+                path: opts.path,
+                projectSlug: opts.project,
+              })
+            : await summary.summarize(opts.project ?? '');
+        console.log(JSON.stringify(result, null, 2));
       } finally {
         await app.close();
       }
@@ -191,14 +290,16 @@ async function main(): Promise<void> {
   program
     .command('compare')
     .description('Compare two documents by structure and content overlap')
-    .requiredOption('--a <path>', 'document A path')
-    .requiredOption('--b <path>', 'document B path')
+    .requiredOption('--path-a <path>', 'document A path')
+    .requiredOption('--path-b <path>', 'document B path')
     .option('--project <slug>', 'project scope')
-    .action(async (opts: { a: string; b: string; project?: string }) => {
+    .action(async (opts: { pathA: string; pathB: string; project?: string }) => {
       const app = await createContext();
       try {
         const compare = app.get(CompareService);
-        console.log(JSON.stringify(await compare.compare(opts.a, opts.b, opts.project), null, 2));
+        console.log(
+          JSON.stringify(await compare.compare(opts.pathA, opts.pathB, opts.project), null, 2),
+        );
       } finally {
         await app.close();
       }
@@ -206,14 +307,79 @@ async function main(): Promise<void> {
 
   program
     .command('classify')
-    .description('Classify a text sample (rules + semantics)')
-    .argument('<text>', 'text to classify')
-    .action(async (text: string) => {
+    .description('Reclassify indexed documents (--project) or classify a text sample')
+    .argument('[text]', 'text sample to classify (optional)')
+    .option('--project <slug>', 'reclassify documents of a project (no re-embedding)')
+    .action(async (text: string | undefined, opts: { project?: string }) => {
       const app = await createContext();
       try {
-        const classifier = app.get(ClassifierService);
-        const result = await classifier.classify(text);
+        const orchestrator = app.get(IngestionOrchestrator);
+        if (text && !opts.project) {
+          const classifier = app.get(ClassifierService);
+          const result = await classifier.classify(text);
+          console.log(JSON.stringify(result, null, 2));
+        } else {
+          // --project <slug> limits the pass; no args reclassifies everything.
+          const result = await orchestrator.reclassify(opts.project);
+          console.log(JSON.stringify(result, null, 2));
+        }
+      } finally {
+        await app.close();
+      }
+    });
+
+  program
+    .command('export-knowledge')
+    .description(
+      'Gera o knowledge bundle (.tar.gz) com os arquivos indexáveis do ecossistema (rodar na máquina dev)',
+    )
+    .option(
+      '--out <path>',
+      'arquivo de saída (default ./knowledge-bundle.tar.gz)',
+      'knowledge-bundle.tar.gz',
+    )
+    .action(async (opts: { out: string }) => {
+      const app = await createContext();
+      try {
+        const bundle = app.get(KnowledgeBundleService);
+        const result = await bundle.exportBundle(opts.out);
         console.log(JSON.stringify(result, null, 2));
+      } finally {
+        await app.close();
+      }
+    });
+
+  program
+    .command('sync')
+    .description(
+      'VPS: extrai o knowledge bundle (se houver) e roda a ingestão incremental. Usado pelo entrypoint e pelo cron.',
+    )
+    .option(
+      '--bundle <path>',
+      'caminho do bundle (default: $KNOWLEDGE_BUNDLE_PATH)',
+      process.env.KNOWLEDGE_BUNDLE_PATH,
+    )
+    .option('--project <slug>', 'ingere apenas um projeto')
+    .action(async (opts: { bundle?: string; project?: string }) => {
+      const app = await createContext();
+      try {
+        const bundle = app.get(KnowledgeBundleService);
+        const orchestrator = app.get(IngestionOrchestrator);
+        let extracted = 0;
+        let bundlePath: string | null = null;
+        const candidate = opts.bundle ?? process.env.KNOWLEDGE_BUNDLE_PATH;
+        if (candidate) {
+          const { access } = await import('node:fs/promises');
+          try {
+            await access(candidate);
+            bundlePath = candidate;
+            extracted = await bundle.extractBundle(candidate);
+          } catch {
+            bundlePath = null; // bundle ausente -> apenas ingest do que existir
+          }
+        }
+        const ingest = await orchestrator.ingest({ projectSlug: opts.project }, {});
+        console.log(JSON.stringify({ bundle: bundlePath, extracted, ingest }, null, 2));
       } finally {
         await app.close();
       }

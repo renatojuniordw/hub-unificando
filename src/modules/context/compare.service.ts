@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import type { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../infra/prisma/prisma.service';
-import type { Chunk } from '../../generated/prisma/client.js';
+import type { Chunk, Document } from '../../generated/prisma/client.js';
 import { estimateTokens } from './token';
 
 export interface CompareDocumentInfo {
@@ -33,12 +33,26 @@ export interface CompareResult {
 export class CompareService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async compare(aPath: string, bPath: string, projectSlug?: string): Promise<CompareResult> {
-    const a = await this.findDocument(aPath, projectSlug);
-    const b = await this.findDocument(bPath, projectSlug);
-    if (!a) throw new NotFoundException(`Document "${aPath}" not found`);
-    if (!b) throw new NotFoundException(`Document "${bPath}" not found`);
+  async compare(pathA: string, pathB: string, projectSlug?: string): Promise<CompareResult> {
+    const a = await this.findDocument(pathA, projectSlug);
+    const b = await this.findDocument(pathB, projectSlug);
+    if (!a) throw new NotFoundException(`Document "${pathA}" not found`);
+    if (!b) throw new NotFoundException(`Document "${pathB}" not found`);
+    return this.compute(a, b);
+  }
 
+  /** Compares two documents referenced by their ids (spec §10: "ou ids"). */
+  async compareByIds(idA: string, idB: string): Promise<CompareResult> {
+    const [a, b] = await Promise.all([
+      this.prisma.document.findUnique({ where: { id: idA } }),
+      this.prisma.document.findUnique({ where: { id: idB } }),
+    ]);
+    if (!a) throw new NotFoundException(`Document "${idA}" not found`);
+    if (!b) throw new NotFoundException(`Document "${idB}" not found`);
+    return this.compute(a, b);
+  }
+
+  private async compute(a: Document, b: Document): Promise<CompareResult> {
     const [aChunks, bChunks] = await Promise.all([this.chunksOf(a.id), this.chunksOf(b.id)]);
 
     const aHeadings = uniqueHeadings(aChunks);

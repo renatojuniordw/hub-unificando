@@ -23,7 +23,7 @@ export class SearchQueryDto {
   @ApiPropertyOptional({ description: 'Restrict results to a project slug' })
   @IsOptional()
   @IsString()
-  projectSlug?: string;
+  project?: string;
 
   @ApiPropertyOptional({ description: 'Restrict to a category slug' })
   @IsOptional()
@@ -35,13 +35,20 @@ export class SearchQueryDto {
   @IsString()
   docType?: string;
 
-  @ApiPropertyOptional({ default: 20, minimum: 1, maximum: 50 })
+  @ApiPropertyOptional({ default: 1, minimum: 1 })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  @Max(50)
-  limit = 20;
+  page = 1;
+
+  @ApiPropertyOptional({ default: 20, minimum: 1, maximum: 100 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  pageSize = 20;
 
   @ApiPropertyOptional({ default: 'balanced', enum: ['balanced', 'recall', 'precision'] })
   @IsOptional()

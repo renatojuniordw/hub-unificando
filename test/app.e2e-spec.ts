@@ -74,28 +74,46 @@ describe('hub-unificando API (e2e)', () => {
     expect(res.body.data.length).toBeGreaterThanOrEqual(16);
   });
 
-  it('busca híbrida devolve hits com score', async () => {
+  it('busca híbrida devolve hits com score (params da spec)', async () => {
     const res = await request(app.getHttpServer())
       .get('/api/v1/search')
-      .query({ q: 'busca hibrida pgvector', limit: 3 })
+      .query({ q: 'busca hibrida pgvector', project: 'radar-unificando', pageSize: 3 })
       .expect(200);
     expect(res.body.success).toBe(true);
     expect(res.body.data.hits.length).toBeGreaterThan(0);
     expect(res.body.data.hits[0].score).toBeGreaterThan(0);
   });
 
-  it('summary e compare respondem', async () => {
+  it('summary (target=project/document) e compare (pathA/pathB) respondem', async () => {
     const summary = await request(app.getHttpServer())
       .get('/api/v1/summary')
-      .query({ projectSlug: 'radar-unificando' })
+      .query({ target: 'project', project: 'radar-unificando' })
       .expect(200);
     expect(summary.body.data.counts.documents).toBeGreaterThan(0);
 
+    const docSummary = await request(app.getHttpServer())
+      .get('/api/v1/summary')
+      .query({ target: 'document', project: 'med-unificando', path: 'docs/DATABASE.md' })
+      .expect(200);
+    expect(docSummary.body.data.document.path).toBe('docs/DATABASE.md');
+
     const compare = await request(app.getHttpServer())
       .get('/api/v1/compare')
-      .query({ a: 'docs/DATABASE.md', b: 'docs/DATABASE.md', projectSlug: 'med-unificando' })
+      .query({ pathA: 'docs/DATABASE.md', pathB: 'docs/DATABASE.md', project: 'med-unificando' })
       .expect(200);
     expect(compare.body.data.duplicated).toBe(true);
+  });
+
+  it('context/export monta o pacote §12 com fontes não vazias', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/api/v1/context/export')
+      .query({ project: 'radar-unificando', topic: 'notificações', maxTokens: 4000 })
+      .expect(200);
+    const ids = res.body.data.sections.map((section: { id: string }) => section.id);
+    expect(ids).toContain('fontes');
+    const fontes = res.body.data.sections.find((section: { id: string }) => section.id === 'fontes');
+    expect(fontes.content.length).toBeGreaterThan(0);
+    expect(res.body.data.meta.totalTokens).toBeLessThan(4200);
   });
 
   it('POST /ingest/jobs exige admin (401 sem Authorization)', async () => {

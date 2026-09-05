@@ -10,7 +10,20 @@ import {
   type VectorSearchFilters,
 } from '../../infra/vector/vector.sql';
 import { ENV, type Env } from '../../shared/config/env';
-import type { SearchQueryDto, SearchStrategy } from './search.dto';
+import type { SearchStrategy } from './search.dto';
+
+/** Internal search input (REST/MCP/CLI all map into this shape). */
+export interface SearchInput {
+  q: string;
+  projectSlug?: string;
+  category?: string;
+  docType?: string;
+  /** Max results to return (REST pageSize; MCP topK; CLI --top). */
+  limit: number;
+  /** Pagination offset for REST (page-1)*pageSize. */
+  skip?: number;
+  strategy?: SearchStrategy;
+}
 
 /** Fusion weights per strategy (docs/SEARCH.md, same family as med). */
 const FUSION = {
@@ -67,8 +80,9 @@ export class SearchService {
     @Inject(ENV) private readonly env: Env,
   ) {}
 
-  async search(query: SearchQueryDto): Promise<SearchResponse> {
-    const limit = query.limit ?? 20;
+  async search(query: SearchInput): Promise<SearchResponse> {
+    const limit = query.limit;
+    const skip = query.skip ?? 0;
     const strategy = query.strategy ?? 'balanced';
     const cacheKey = this.cacheKey(query);
     const cached = await this.readCache(cacheKey);
@@ -97,7 +111,7 @@ export class SearchService {
 
     const weights = FUSION[strategy];
     const ranked = this.fuse(vectorHits, keywordHits, trigramHits, weights);
-    const hits = ranked.slice(0, limit).map((entry) => this.toHit(entry));
+    const hits = ranked.slice(skip, skip + limit).map((entry) => this.toHit(entry));
 
     const response: SearchResponse = { query: query.q, strategy, hits, total: ranked.length };
     await this.writeCache(cacheKey, response);
@@ -162,13 +176,14 @@ export class SearchService {
     };
   }
 
-  private cacheKey(query: SearchQueryDto): string {
+  private cacheKey(query: SearchInput): string {
     const parts = [
       query.q.trim().toLowerCase(),
       query.projectSlug ?? '',
       query.category ?? '',
       query.docType ?? '',
-      String(query.limit ?? 20),
+      String(query.limit),
+      String(query.skip ?? 0),
       query.strategy ?? 'balanced',
     ];
     return `search:v1:${parts.join('|')}`;

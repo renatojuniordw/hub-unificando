@@ -1,0 +1,120 @@
+# docker-compose para VPS — sem dependência dos repositórios irmãos.
+#
+# O conhecimento chega como "knowledge bundle" (knowledge-bundle.tar.gz),
+# gerado na máquina dev com `npm run hub -- export-knowledge` e colocado no
+# volume `bundle-data` (ex.: docker compose -f docker-compose.prod.yml cp
+# knowledge-bundle.tar.gz app:/data/bundle/ ou upload + docker cp). O serviço
+# `sync` extrai o bundle e ingere em loop (cron); quando você sobe um bundle
+# novo, o próximo tick detecta e atualiza o índice.
+#
+# Uso:
+#   docker compose -f docker-compose.prod.yml up -d --build
+#   docker compose -f docker-compose.prod.yml cp ./knowledge-bundle.tar.gz app:/data/bundle/knowledge-bundle.tar.gz
+#   docker compose -f docker-compose.prod.yml restart sync   # força um sync imediato
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: hub
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-hub}
+      POSTGRES_DB: hub_unificando
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hub -d hub_unificando"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: "11020"
+      DATABASE_URL: postgresql://hub:${POSTGRES_PASSWORD:-hub}@db:5432/hub_unificando
+      REDIS_URL: redis://redis:6379
+      REDIS_ENABLED: "true"
+      HUB_SCAN_ROOT: /data/knowledge
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-Xenova/multilingual-e5-base}
+      EMBEDDING_DIMS: ${EMBEDDING_DIMS:-768}
+      EMBEDDING_CACHE_DIR: /data/.transformers-cache
+      ADMIN_API_KEY: ${ADMIN_API_KEY:-}
+      MCP_API_KEY: ${MCP_API_KEY:-}
+      MCP_ENABLE_JSON_RESPONSE: ${MCP_ENABLE_JSON_RESPONSE:-false}
+      MCP_SESSION_TTL_MIN: ${MCP_SESSION_TTL_MIN:-60}
+      MCP_RATE_LIMIT: ${MCP_RATE_LIMIT:-120}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:11020}
+    ports:
+      - "${HUB_PORT:-11020}:11020"
+    volumes:
+      - knowledge:/data/knowledge
+      - transformers-cache:/data/.transformers-cache
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:11020/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 20s
+      timeout: 10s
+      retries: 6
+
+  # Cron de ingestão: extrai o knowledge bundle e re-ingere (incremental).
+  # SYNC_INTERVAL_SECONDS controla o intervalo (default 6h). Roda só depois
+  # do app ficar healthy (evita corrida com o seed-categories do entrypoint).
+  sync:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    command:
+      - sh
+      - -c
+      - |
+        while true; do
+          echo "[sync] tick: extraindo bundle + ingestão incremental"
+          node dist/src/cli.js sync
+          echo "[sync] done; próximo tick em ${SYNC_INTERVAL_SECONDS:-21600}s"
+          sleep ${SYNC_INTERVAL_SECONDS:-21600}
+        done
+    depends_on:
+      app:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://hub:${POSTGRES_PASSWORD:-hub}@db:5432/hub_unificando
+      REDIS_URL: redis://redis:6379
+      REDIS_ENABLED: "true"
+      HUB_SCAN_ROOT: /data/knowledge
+      KNOWLEDGE_BUNDLE_PATH: /data/bundle/knowledge-bundle.tar.gz
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-Xenova/multilingual-e5-base}
+      EMBEDDING_DIMS: ${EMBEDDING_DIMS:-768}
+      EMBEDDING_CACHE_DIR: /data/.transformers-cache
+    volumes:
+      - knowledge:/data/knowledge
+      - bundle-data:/data/bundle
+      - transformers-cache:/data/.transformers-cache
+
+volumes:
+  pgdata:
+  redisdata:
+  knowledge:
+  bundle-data:
+  transformers-cache:

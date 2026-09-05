@@ -13,7 +13,18 @@ const schema = z.object({
     .optional()
     .describe('orçamento de tokens (default 6000)'),
   sections: z
-    .array(z.enum(['registry', 'documents', 'decisions', 'search']))
+    .array(
+      z.enum([
+        'visao_geral',
+        'arquitetura',
+        'design_system',
+        'componentes_reutilizaveis',
+        'exemplos',
+        'decisoes_previas',
+        'convencoes',
+        'fontes',
+      ]),
+    )
     .optional()
     .describe('seleção de seções (todas por padrão)'),
 });
@@ -23,22 +34,16 @@ export function exportarContextoLlm(deps: McpDeps): McpToolDefinition<typeof sch
   return {
     name: 'exportar_contexto_llm',
     description:
-      'Pacote de contexto pronto para LLM: visão geral, documentação relevante, decisões e busca no tópico, respeitando orçamento de tokens.',
+      'Pacote de contexto pronto para LLM (spec §12): visão geral, arquitetura, design system (com fallback para ui-unificando), componentes reutilizáveis, exemplos, decisões prévias, convenções e fontes — com citações e orçamento de tokens.',
     inputSchema: schema,
     handler: async ({ project, topic, maxTokens, sections }) => {
       const pkg = await deps.context.export({
         projectSlug: project,
         topic,
         maxTokens: maxTokens ?? 6000,
+        sections,
       });
-      const filtered =
-        sections && sections.length > 0
-          ? {
-              ...pkg,
-              sections: pkg.sections.filter((section) => sections.includes(section.id as never)),
-            }
-          : pkg;
-      return filtered;
+      return pkg;
     },
   };
 }

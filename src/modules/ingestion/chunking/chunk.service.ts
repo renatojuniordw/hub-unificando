@@ -24,6 +24,7 @@ export class ChunkService {
     const chunks: ChunkOutput[] = [];
     let buffer: string[] = [];
     let bufferHeading: string | null = null;
+    let bufferTopHeading: string | null = null;
     let bufferSize = 0;
 
     const flush = (): void => {
@@ -32,15 +33,23 @@ export class ChunkService {
       buffer = [];
       bufferSize = 0;
       bufferHeading = null;
+      bufferTopHeading = null;
     };
 
     for (const section of sections) {
       const heading = section.headingLineage.join(' > ') || null;
+      const topHeading = section.headingLineage[0] ?? null;
       const trimmed = section.content;
       if (trimmed.length === 0) continue;
 
       // Flush first whenever the section would overflow the current buffer.
       if (bufferSize > 0 && bufferSize + trimmed.length > this.maxChars) {
+        flush();
+      }
+
+      // Never mix two top-level (H1) documents into the same chunk. Sections
+      // share a chunk only while their top-level heading is identical.
+      if (bufferSize > 0 && topHeading !== bufferTopHeading) {
         flush();
       }
 
@@ -55,6 +64,7 @@ export class ChunkService {
 
       if (bufferSize === 0) {
         bufferHeading = heading;
+        bufferTopHeading = topHeading;
       }
       buffer.push(trimmed);
       bufferSize += trimmed.length;

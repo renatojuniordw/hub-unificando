@@ -97,6 +97,23 @@ The returned shape is always `{ category, categories[], confidence, method }`
 where `method ∈ "rules" | "semantic" | "fallback"`. `classify(text)` is also
 exposed by the CLI (`hub classify "<text>"`).
 
+## Path specialization (§8.2.5)
+
+`src/modules/classification/path-specialization.ts` applies deterministic
+per-file overrides **after** the hybrid classifier, at ingestion and
+reclassification time. The file path wins over the classifier primary label:
+
+| Path | Primary | Notes |
+|---|---|---|
+| `prompts/*.md` | `prompt` | `metadata.promptId` = filename stem |
+| `CLAUDE.md` / `AGENTS.md` | `workflow` | agent/process guides |
+| `*mcp*.md`, `docs/mcp/**`, `MCP.md` | `mcp` | MCP docs |
+| `*design-system*`, `docs/design-system*` | `design-system` | keeps semantic multi-label |
+| `README.md` | `general` / `api` | `api` when the first 600 chars mention HTTP surface |
+
+The classifier keeps full authority for every other file. Prompt/MCP/workflow
+files are single-label; design-system/README keep semantic labels merged.
+
 ## Fallback
 
 Only when **no rule score is > 0** and **no semantic score clears 0.5** does
@@ -122,11 +139,12 @@ npm run hub -- seed-categories --force # recompute and overwrite
 ## Where classification runs
 
 - **Ingestion** — `IngestionOrchestrator.ingestFile` classifies
-  `title + chunks content`, sliced to the first 3000 chars. Dry-runs skip it
-  and stamp `general`.
+  `title + chunks content`, sliced to the first 3000 chars, then applies the
+  path rules above. Dry-runs skip classification and stamp `general`.
 - **`seed-categories`** does not classify documents — it only seeds the
   prototypes the semantic pass depends on. To (re)classify the corpus after a
-  taxonomy change, run `hub ingest <slug> --force` afterwards.
+  taxonomy change without re-embedding:
+  `hub classify --project <slug>` (all projects when omitted).
 
 ## Accuracy notes and tuning backlog
 
@@ -138,8 +156,9 @@ npm run hub -- seed-categories --force # recompute and overwrite
 - The classifier **input is only the first 3000 chars**; docs whose category
   signal sits deep in the body can drift toward `general` — extend the window
   or classify per chunk and aggregate if it shows up in accuracy reviews.
-- `documentText` does not include the file path (only the title); README vs
-  AGENTS.md distinction is handled by `contentKind`, not the classifier.
+- `documentText` does not include the file path (only the title); the README
+  vs AGENTS.md vs prompt-library distinction is handled by the **path
+  specialization rules**, not the classifier body.
 - Backlog candidates: per-chunk majority voting, keyword synonym groups,
   prototype warm-up at boot to avoid first-request latency, and a labeled
   golden-set evaluation to tune `0.75/0.5/0.55`.

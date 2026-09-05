@@ -80,6 +80,35 @@ export class IngestionWriteRepository {
     });
   }
 
+  /**
+   * Upserts the Decision row backing an ADR file (docs/decisions/*.md).
+   * The file is also indexed as a regular document; the Decision is the
+   * structured mirror used by /decisions and LLM context packages.
+   */
+  async replaceDecision(input: {
+    projectSlug: string;
+    sourcePath: string;
+    title: string;
+    status: string;
+    summary: string;
+    content: string;
+  }): Promise<void> {
+    const { projectSlug, sourcePath } = input;
+    await this.prisma.$transaction(async (tx) => {
+      await tx.decision.deleteMany({ where: { projectSlug, sourcePath } });
+      await tx.decision.create({
+        data: {
+          projectSlug,
+          title: input.title,
+          status: input.status,
+          summary: input.summary,
+          content: input.content,
+          sourcePath,
+        },
+      });
+    });
+  }
+
   async createJob(kind: string, scope: object): Promise<{ id: string }> {
     const job = await this.prisma.ingestionJob.create({
       data: { kind, status: 'queued', scope },

@@ -13,6 +13,14 @@ export class SearchController {
     summary: 'Hybrid search (vector + keyword + fuzzy) with RRF fusion',
   })
   search(@Query() query: SearchQueryDto) {
-    return this.searchService.search(query);
+    return this.searchService.search({
+      q: query.q,
+      projectSlug: query.project,
+      category: query.category,
+      docType: query.docType,
+      limit: query.pageSize,
+      skip: (query.page - 1) * query.pageSize,
+      strategy: query.strategy,
+    });
   }
 }

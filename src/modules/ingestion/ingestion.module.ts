@@ -4,6 +4,7 @@ import { ClassificationModule } from '../classification/classification.module';
 import { ChunkService } from './chunking/chunk.service';
 import { IngestionOrchestrator } from './orchestrator/ingestion-orchestrator.service';
 import { IngestionWriteRepository } from './repository/ingestion-write.repository';
+import { KnowledgeBundleService } from './knowledge/knowledge-bundle.service';
 import { RegistryScanService } from './registry/registry-scan.service';
 import { ScannerService } from './scan/scanner.service';
 import { IngestionQueue } from './queue/ingestion.queue';
@@ -19,6 +20,7 @@ import { IngestionController } from './ingestion.controller';
     IngestionWriteRepository,
     IngestionOrchestrator,
     IngestionQueue,
+    KnowledgeBundleService,
   ],
   exports: [
     ScannerService,
@@ -27,6 +29,7 @@ import { IngestionController } from './ingestion.controller';
     IngestionWriteRepository,
     IngestionOrchestrator,
     IngestionQueue,
+    KnowledgeBundleService,
   ],
 })
 export class IngestionModule {}

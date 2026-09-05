@@ -13,6 +13,8 @@ export interface IngestStats {
 export interface IngestOptions {
   force?: boolean;
   dryRun?: boolean;
+  /** Delete all indexed documents of the target project(s) before ingesting. */
+  reset?: boolean;
 }
 
 export interface IngestionScope {

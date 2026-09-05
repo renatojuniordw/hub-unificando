@@ -48,6 +48,16 @@ export const ENV = Symbol('ENV');
  * Throws with a descriptive message on the first validation failure.
  */
 export function validateEnv(raw: Record<string, unknown>): Env {
+  // Fail-fast in production: secrets/connection strings must be explicit, not
+  // supplied by schema defaults (which exist only for local DX).
+  if (raw.NODE_ENV === 'production') {
+    const missing = ['DATABASE_URL', 'REDIS_URL'].filter((key) => !raw[key]);
+    if (missing.length > 0) {
+      throw new Error(
+        `Missing required environment variables in production: ${missing.join(', ')}`,
+      );
+    }
+  }
   const parsed = EnvSchema.safeParse(raw);
   if (!parsed.success) {
     const fields = JSON.stringify(parsed.error.flatten().fieldErrors, null, 2);

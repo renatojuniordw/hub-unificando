@@ -54,7 +54,8 @@ RRF(chunk) = Σ contributions over the three ranked lists
 ```
 
 Constants (`src/modules/search/search.service.ts`): `RRF_K = 60`,
-`FUSION_TOP_K = 60`; the returned `limit` defaults to 20 (max 50).
+`FUSION_TOP_K = 60`. The REST endpoint paginates with `page`/`pageSize`
+(`pageSize` defaults to 20, max 100).
 
 | Strategy | vector | keyword | trigram | Tuned for |
 |---|---|---|---|---|
@@ -78,7 +79,7 @@ Cache in `SearchService` (`src/infra/redis/redis.service.ts` provides the
 client). Key:
 
 ```
-search:v1:<q lowercase>|<projectSlug?>|<category?>|<docType?>|<limit>|<strategy>
+search:v1:<q lowercase>|<project?>|<category?>|<docType?>|<limit>|<skip>|<strategy>
 ```
 
 - TTL: `SEARCH_CACHE_TTL_SECONDS` (default 60 s). Cache is best-effort
@@ -91,14 +92,15 @@ search:v1:<q lowercase>|<projectSlug?>|<category?>|<docType?>|<limit>|<strategy>
 | Param | Type | Notes |
 |---|---|---|
 | `q` | string | required, non-empty, max 500 |
-| `projectSlug` | string | optional |
+| `project` | string | optional (project slug; spec §10 uses `project`) |
 | `category` | string | optional (single slug) |
 | `docType` | string | optional |
-| `limit` | int | 1-50, default 20 |
+| `page` | int | 1-based, default 1 |
+| `pageSize` | int | 1-100, default 20 |
 | `strategy` | enum | `balanced` \| `recall` \| `precision` |
 
 ```bash
-curl "http://localhost:11020/api/v1/search?q=busca%20hibrida%20pgvector&limit=3"
+curl "http://localhost:11020/api/v1/search?q=busca%20hibrida%20pgvector&project=med-unificando&pageSize=3"
 ```
 
 ```json
@@ -118,16 +120,16 @@ curl "http://localhost:11020/api/v1/search?q=busca%20hibrida%20pgvector&limit=3"
 } }
 ```
 
-`total` counts fused hits before slicing to `limit`; scores are small
-fractions (`weight/(60+rank+1)` sums).
+`total` counts fused hits before slicing to `pageSize` (offset `page`);
+scores are small fractions (`weight/(60+rank+1)` sums).
 
 ## CLI
 
 `hub search` renders one line per hit plus a totals footer (`src/cli.ts`,
-default `--limit 10`):
+default 10 hits via `--top`/`--limit`):
 
 ```bash
-npm run hub -- search "chrome extension vaga ATS" --limit 5
+npm run hub -- search "chrome extension vaga ATS" --top 5
 npm run hub -- search "mcp streamable http" --project med-unificando --strategy precision
 ```
 

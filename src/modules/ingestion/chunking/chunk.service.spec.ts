@@ -56,4 +56,35 @@ describe('ChunkService', () => {
   it('returns empty for empty text', () => {
     expect(service.chunk('markdown', '')).toEqual([]);
   });
+
+  it('never mixes two H1 documents into the same chunk', () => {
+    const twoH1 = ['# Alpha', '', 'Curto conteudo A.', '', '# Beta', '', 'Curto conteudo B.'].join(
+      '\n',
+    );
+    const chunks = service.chunk('markdown', twoH1);
+    expect(chunks.length).toBe(2);
+    expect(chunks[0]?.heading).toBe('Alpha');
+    expect(chunks[0]?.content).not.toContain('Curto conteudo B');
+    expect(chunks[1]?.heading).toBe('Beta');
+    expect(chunks[1]?.content).toContain('Curto conteudo B');
+  });
+
+  it('still groups sub-headings under the same H1', () => {
+    const singleH1 = [
+      '# Alpha',
+      '',
+      'Intro A.',
+      '',
+      '## Beta',
+      '',
+      'Curto B.',
+      '',
+      '## Gamma',
+      '',
+      'Curto C.',
+    ].join('\n');
+    const chunks = service.chunk('markdown', singleH1);
+    expect(chunks.length).toBe(1);
+    expect(chunks[0]?.content).toContain('Curto C.');
+  });
 });

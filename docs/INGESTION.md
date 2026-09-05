@@ -35,6 +35,12 @@ For each enabled project (or the requested `projectSlug`):
   segment**: `hub-unificando`, `node_modules`, `.git`, `.next`, `dist`,
   `coverage`, `.refactor`, `.verboo`, `.claude`, `playwright-report`,
   `test-results`, `.turbo`, `.cache`.
+- **Any dot-directory** (`.agents`, `.github`, `.vscode`, …) is skipped, and
+  dotfiles are never indexed.
+- **`public`** is only walked when it hosts documentation (a
+  `docs`/`documentation` subfolder); static asset dirs are skipped.
+- **Nested git checkouts** (a subfolder with its own `.git`, e.g. a cloned
+  vendor repo inside a project) are skipped — they are separate codebases.
 - **Indexable** — extension in `INDEXABLE_EXTENSIONS` = `.md`, `.mdx`, `.txt`,
   or name in `INDEXABLE_NAMES` = `CLAUDE.md`, `AGENTS.md`, `README.md`
   (`isIndexable`).
@@ -64,10 +70,12 @@ For each enabled project (or the requested `projectSlug`):
 | `CHUNK_OVERLAP_CHARS` | 150 | chars carried between split parts |
 
 Sections accumulate in a buffer under the buffer's heading; a section that
-would overflow `maxChars` flushes it first. A single section larger than
-`maxChars` is split by `splitLongSection` on blank-line paragraph boundaries,
-carrying the last 150 chars of each part into the next. Each chunk stores its
-heading lineage joined with `" > "` and a slugified `anchor`
+would overflow `maxChars` flushes it first. A **top-level heading change also
+flushes** — two H1 documents never share a chunk (sub-headings under the same
+H1 still merge). A single section larger than `maxChars` is split by
+`splitLongSection` on blank-line paragraph boundaries, carrying the last 150
+chars of each part into the next. Each chunk stores its heading lineage
+joined with `" > "` and a slugified `anchor`
 (`docs/DATABASE.md#banco-de-dados-tecnologia`), built in the orchestrator.
 
 ## Dedupe and re-index
@@ -98,8 +106,17 @@ In `ingestFile` (`ingestion-orchestrator.service.ts`):
   (`TOKEN_CHARS_DIVISOR`).
 - `docType` = `markdown` (`.md`/`.mdx`) or `txt`.
 - `contentKind` by name: `README*` → `README`; `CLAUDE.md`/`AGENTS.md` →
-  `AGENT-GUIDE`; else `MARKDOWN`/`TEXT`.
+  `AGENT-GUIDE`; `prompts/*.md` → `PROMPT`; else `MARKDOWN`/`TEXT`.
 - `metadata.headings` = first 10 chunk headings.
+- **Path specialization (§8.2.5)** overrides the classifier primary label:
+  `prompts/*.md` → `prompt` + `metadata.promptId`; `CLAUDE.md`/`AGENTS.md` →
+  `workflow`; `*mcp*.md`/`mcp/` → `mcp`; `design-system*` → `design-system`;
+  `README.md` → `general`/`api` heuristic. Rules live in
+  `src/modules/classification/path-specialization.ts`.
+- **ADRs** — files under a `decisions/` folder are additionally mirrored into
+  the `decisions` table (`Decision` row with parsed title/status/summary), so
+  `GET /projects/:slug/decisions` and the context `decisoes_previas` section
+  are populated.
 
 ## Embedding batches
 
@@ -152,6 +169,10 @@ npm run hub -- ingest radar-unificando --force     # ignore sha256 dedupe
 npm run hub -- ingest --dry-run            # scan + parse only, no writes/embeddings
 npm run hub -- scan                        # refresh registry from HUB_SCAN_ROOT
 npm run hub -- status                      # counts: projects/documents/chunks/embedded
+npm run hub -- list-projects               # registry overview (slug, name, counts)
+npm run hub -- classify --project radar-unificando   # reclassify docs, no re-embedding
+npm run hub -- reindex-embeddings --project med-unificando  # recompute chunk vectors
+npm run hub -- health                      # db/redis readiness
 ```
 
 `scripts/smoke-ingest.ts` ingests a project and exits non-zero when any file
@@ -164,6 +185,9 @@ errors — used as a CI/local smoke check (`.github/workflows/ci.yml`
   files are re-indexed (delete + recreate + re-embed).
 - **Full rebuild** of a project: `hub ingest <slug> --force`.
 - **After taxonomy changes** (keywords/new categories): re-run
-  `hub seed-categories --force`, then re-ingest with `--force` to reclassify.
+  `hub seed-categories --force`, then `hub classify --project <slug>` (or
+  re-ingest with `--force`) to reclassify without re-embedding.
+- **After a model/dims change**: `hub reindex-embeddings` recomputes chunk
+  vectors in place (schema column stays `vector(768)` — see ADR 0002).
 - A failed file never aborts the run: it lands in `errors`/`errorsByPath`, and
   `lastIngestedAt` is not updated for that project.

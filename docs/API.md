@@ -71,10 +71,10 @@ curl "http://localhost:11020/api/v1/projects?search=med&pageSize=5"
 
 ### Busca híbrida
 
-`GET /search?q=&projectSlug=&category=&docType=&limit=&strategy=`
+`GET /search?q=&project=&category=&docType=&page=&pageSize=&strategy=`
 
 ```bash
-curl "http://localhost:11020/api/v1/search?q=busca%20hibrida%20pgvector&limit=3"
+curl "http://localhost:11020/api/v1/search?q=busca%20hibrida%20pgvector&project=med-unificando&pageSize=3"
 ```
 
 ```json
@@ -96,40 +96,49 @@ curl "http://localhost:11020/api/v1/search?q=busca%20hibrida%20pgvector&limit=3"
 }
 ```
 
-Parâmetros: `strategy` = `balanced` | `recall` | `precision`; `limit` ≤ 50;
-filtros `projectSlug`/`category`/`docType`. Detalhes da fusão em
-[SEARCH.md](SEARCH.md).
+Parâmetros: `strategy` = `balanced` | `recall` | `precision`; paginação
+`page`/`pageSize` (`pageSize` ≤ 100); filtros `project`/`category`/`docType`.
+Detalhes da fusão em [SEARCH.md](SEARCH.md).
 
 ### Contexto para LLM
 
-`GET /context/export?projectSlug=&topic=&categories[]=&maxTokens=`
+`GET /context/export?project=&topic=&categories[]=&maxTokens=&sections=`
 
 ```bash
-curl "http://localhost:11020/api/v1/context/export?projectSlug=med-unificando&topic=mcp&maxTokens=4000"
+curl "http://localhost:11020/api/v1/context/export?project=med-unificando&topic=mcp&maxTokens=4000"
 ```
 
 ```json
 { "success": true, "data": {
     "meta": { "projectSlug": "med-unificando", "topic": "mcp", "generatedAt": "...", "tokenBudget": 4000, "totalTokens": 3667 },
     "sections": [
-      { "id": "registry", "title": "Visão Geral do Projeto", "content": "...", "tokens": 310 },
-      { "id": "documents", "title": "Documentação Relevante", "content": "...", "tokens": 2900 },
-      { "id": "decisions", "title": "Decisões (ADRs)", "content": "...", "tokens": 150 },
-      { "id": "search", "title": "Resultados de Busca do Tópico", "content": "...", "tokens": 307 }
+      { "id": "visao_geral", "title": "Visão Geral", "content": "...", "tokens": 310 },
+      { "id": "arquitetura", "title": "Arquitetura", "content": "#### Camadas ...\n_Fonte: docs/ARCHITECTURE.md#camadas_", "tokens": 900 },
+      { "id": "design_system", "title": "Design System", "content": "...", "tokens": 700 },
+      { "id": "componentes_reutilizaveis", "title": "Componentes reutilizáveis", "content": "...", "tokens": 500 },
+      { "id": "exemplos", "title": "Exemplos", "content": "...", "tokens": 400 },
+      { "id": "decisoes_previas", "title": "Decisões prévias", "content": "...", "tokens": 150 },
+      { "id": "convencoes", "title": "Convenções", "content": "...", "tokens": 400 },
+      { "id": "fontes", "title": "Fontes", "content": "- med-unificando/docs/MCP.md#mcp (≈ 55 tokens)", "tokens": 150 }
     ]
 } }
 ```
+
+Seções opcionais via `sections=arquitetura,design_system,fontes` (CSV). O
+pacote segue o catálogo da spec §12 e sempre lista as fontes incluídas.
 
 ### Summary / Compare
 
 | Endpoint | Descrição |
 |---|---|
-| `GET /summary?projectSlug=` | resumo factual (contagens, categorias dominantes, docs recentes) |
-| `GET /compare?a=<pathA>&b=<pathB>&projectSlug=` | similaridade entre dois documentos indexados |
+| `GET /summary?target=project&project=` | resumo contextual de um projeto |
+| `GET /summary?target=document&project=&path=` (ou `id=`) | resumo de um documento |
+| `GET /compare?pathA=&pathB=&project=` (ou `idA=&idB=`) | similaridade entre dois documentos indexados |
 
 ```bash
-curl "http://localhost:11020/api/v1/summary?projectSlug=radar-unificando"
-curl "http://localhost:11020/api/v1/compare?a=docs/DATABASE.md&b=docs/DATABASE.md&projectSlug=med-unificando"
+curl "http://localhost:11020/api/v1/summary?target=project&project=radar-unificando"
+curl "http://localhost:11020/api/v1/summary?target=document&project=med-unificando&path=docs/DATABASE.md"
+curl "http://localhost:11020/api/v1/compare?pathA=docs/DATABASE.md&pathB=docs/DATABASE.md&project=med-unificando"
 # { "similarity": { "headingOverlap": 1, "contentOverlap": 1, "combined": 1 }, "duplicated": true, ... }
 ```
 

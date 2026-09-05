@@ -2,7 +2,9 @@
 
 `ContextAssemblerService` (`src/modules/context/context-assembler.service.ts`)
 assembles an optimized, **token-budgeted** context package for a project so an
-LLM/agent can answer about it without dumping entire repositories. It is
+LLM/agent can answer about it without dumping entire repositories. The
+catalog follows spec §12: every claim carries an inline source and a `fontes`
+section lists all included chunks, so nothing unsourced survives. It is
 exposed three ways: REST, CLI and the MCP `exportar_contexto_llm` tool.
 
 ## Token budget estimation
@@ -16,6 +18,8 @@ heuristic `TOKEN_CHARS_DIVISOR = 4` (`src/shared/constants.ts`):
 - `fitTextToTokens(text, maxTokens)` trims to `maxTokens * 4` chars and, when
   truncation happens, appends the marker `[... truncado por orçamento de
   tokens ...]` so the consumer knows the section is partial.
+- `trimToBudget` reduces whole sections (least important first) until the
+  package fits `Math.max(500, maxTokens)`.
 
 ## REST
 
@@ -24,17 +28,14 @@ heuristic `TOKEN_CHARS_DIVISOR = 4` (`src/shared/constants.ts`):
 
 | Param | Type | Notes |
 |---|---|---|
-| `projectSlug` | string | **required** — project slug |
-| `topic` | string | optional, max 500 chars; activates topic search ranking |
-| `categories` | string[] | optional category slugs (repeat `categories[]=`); filters documents when no topic |
+| `project` | string | **required** — project slug |
+| `topic` | string | optional, max 500 chars; appended to each section query |
+| `categories` | string[] | optional category slugs (repeat `categories[]=`) |
 | `maxTokens` | int | 500–20000, default **6000** |
-
-The effective budget is `Math.max(500, maxTokens)`; sections never exceed
-their slice, so a package is always ≤ the requested budget plus section
-overhead.
+| `sections` | string | optional CSV of section ids (e.g. `arquitetura,fontes`) |
 
 ```bash
-curl "http://localhost:11020/api/v1/context/export?projectSlug=med-unificando&topic=mcp&maxTokens=4000"
+curl "http://localhost:11020/api/v1/context/export?project=med-unificando&topic=mcp&maxTokens=4000"
 ```
 
 ```json
@@ -42,39 +43,43 @@ curl "http://localhost:11020/api/v1/context/export?projectSlug=med-unificando&to
     "meta": { "projectSlug": "med-unificando", "topic": "mcp", "generatedAt": "...",
               "tokenBudget": 4000, "totalTokens": 3667 },
     "sections": [
-      { "id": "registry",    "title": "Visão Geral do Projeto",     "content": "...", "tokens": 310 },
-      { "id": "documents",   "title": "Documentação Relevante",     "content": "...", "tokens": 2900 },
-      { "id": "decisions",   "title": "Decisões (ADRs)",            "content": "...", "tokens": 150 },
-      { "id": "search",      "title": "Resultados de Busca do Tópico", "content": "...", "tokens": 307 }
+      { "id": "visao_geral", "title": "Visão Geral", "content": "...", "tokens": 310 },
+      { "id": "arquitetura", "title": "Arquitetura", "content": "...", "tokens": 900 },
+      { "id": "design_system", "title": "Design System", "content": "...", "tokens": 700 },
+      { "id": "componentes_reutilizaveis", "title": "Componentes reutilizáveis", "content": "...", "tokens": 500 },
+      { "id": "exemplos", "title": "Exemplos", "content": "...", "tokens": 400 },
+      { "id": "decisoes_previas", "title": "Decisões prévias", "content": "...", "tokens": 150 },
+      { "id": "convencoes", "title": "Convenções", "content": "...", "tokens": 400 },
+      { "id": "fontes", "title": "Fontes", "content": "- med-unificando/docs/MCP.md#mcp (≈ 55 tokens)", "tokens": 150 }
     ]
 } }
 ```
 
-## Section catalog and budget ratios
+## Section catalog (spec §12)
 
-Sections are assembled in a fixed order with fixed ratios of the budget
-(`context-assembler.service.ts`):
+Sections are assembled in a fixed order (`context-assembler.service.ts`):
 
-| `id` | title (pt) | Ratio | Content |
-|---|---|---|---|
-| `registry` | Visão Geral do Projeto | 10% | `# name (slug)`, description, repo, tags, stack `name@version (role)` line, last ingestion |
-| `documents` | Documentação Relevante | **60%** with topic, **75%** without | up to 12 documents: `## title (path)` + `summary` (+ `contentKind`) |
-| `decisions` | Decisões (ADRs) | 15% | `## title [status] (date)` + `summary`, up to 8 |
-| `search` | Resultados de Busca do Tópico | 15% | only when `topic` is set — top 5 hybrid hits with `<source>` locations |
+| `id` | title (pt) | Content / retrieval |
+|---|---|---|
+| `visao_geral` | Visão Geral | registry block: name, slug, description, repo, tags, stack `name@version (role)`, last ingestion |
+| `arquitetura` | Arquitetura | top 6 hybrid hits filtered `category=architecture` |
+| `design_system` | Design System | hits `category=design-system`; when the project has none, **falls back to `ui-unificando`** (central brand DS) with an explicit note |
+| `componentes_reutilizaveis` | Componentes reutilizáveis | hits for component keywords in `design-system`, then `architecture` |
+| `exemplos` | Exemplos | hits for `exemplo`/`uso` phrases |
+| `decisoes_previas` | Decisões prévias | accepted ADRs (up to 5), topic-filtered when a topic is given |
+| `convencoes` | Convenções | hits `category=workflow` (CLAUDE/AGENTS/gates) |
+| `fontes` | Fontes | deduped `project/path#heading (≈ N tokens)` list of every included chunk |
 
-Notes on behavior:
+Rules of the gold line:
 
-- With a `topic`, the document list is re-ranked by `SearchService` (hybrid,
-  `strategy=balanced`, limit 20) using `score → 1 - 1/(1+score)` as the
-  re-rank key; `documents` receives the larger slice and `search` is added.
-- Without a `topic`, `categories` filter the document list
-  (`doc.categories.some(c => categories.includes(c))`); `search` is empty.
-- Document content is `summary` only (first 400 chars of chunk 0) — full text
-  lives behind chunk anchors returned by search. Decisions use `summary`, not
-  full ADR content.
-- Each section is independently `fitTextToTokens`-trimmed to its slice, and
-  `buildDocuments` stops early when fewer than 64 tokens remain, so the
-  package cannot overspend.
+- Each included chunk renders as `#### heading` + trimmed body + a
+  `_Fonte: project/path#anchor_` line — **every assertion is sourced**.
+- The `fontes` section is always produced (when chunks were included) and the
+  CLI/REST/MCP consumers see exactly the same catalog.
+- Retrieval queries are built as `"<section phrase> <topic>"` (hybrid,
+  `strategy=balanced`), so a focused `topic` re-ranks every section.
+- `trimToBudget` trims least-important sections first, always keeping
+  `visao_geral` and `fontes` until the very end.
 
 ## CLI
 
@@ -100,21 +105,21 @@ no extra auth beyond the MCP transport).
 | `project` | string | required slug |
 | `topic` | string | optional focus topic |
 | `maxTokens` | int | 500–20000, default 6000 |
-| `sections` | enum[] | optional whitelist: `registry`, `documents`, `decisions`, `search` |
+| `sections` | enum[] | optional whitelist: `visao_geral`, `arquitetura`, `design_system`, `componentes_reutilizaveis`, `exemplos`, `decisoes_previas`, `convencoes`, `fontes` |
 
 ```json
 { "name": "exportar_contexto_llm",
   "arguments": { "project": "radar-unificando", "topic": "chrome extension", "maxTokens": 5000 } }
 ```
 
-The tool filters the assembled package to the requested `sections` when a
-whitelist is supplied and returns the same `meta`/`sections` shape.
+The tool passes the whitelist straight to the assembler and returns the same
+`meta`/`sections` shape.
 
 ## Consumers
 
-- Agents that need "the right 3000 tokens about this project" call
+- Agents that need "the right N tokens about this project" call
   `context/export` (REST/MCP) instead of gluing many search calls together.
-- Compare (`GET /api/v1/compare`, CLI `hub compare`) and factual summaries
+- Compare (`GET /api/v1/compare`, CLI `hub compare`) and summaries
   (`GET /api/v1/summary`, CLI `hub summary`) live in the same
   `src/modules/context/` module but are not token packages; they are covered in
   `docs/API.md`.

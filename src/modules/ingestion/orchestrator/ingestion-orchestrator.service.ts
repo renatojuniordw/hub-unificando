@@ -1,11 +1,12 @@
 import { join, basename } from 'node:path';
 import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import type { Project } from '../../../generated/prisma/client.js';
+import type { Prisma, Project } from '../../../generated/prisma/client.js';
 import { PrismaService } from '../../../infra/prisma/prisma.service';
 import { upsertChunkEmbeddings } from '../../../infra/vector/vector.sql';
 import { ENV, type Env } from '../../../shared/config/env';
 import { EmbeddingProvider } from '../../../infra/embedding/embedding.provider';
 import { ClassifierService } from '../../classification/classifier.service';
+import { applyPathSpecialization } from '../../classification/path-specialization';
 import { ChunkService } from '../chunking/chunk.service';
 import { detectLanguage } from '../parsing/sections';
 import { ScannerService, type ScannedFile } from '../scan/scanner.service';
@@ -87,6 +88,12 @@ export class IngestionOrchestrator {
       errors: 0,
       errorsByPath: [] as string[],
     };
+    if (options.reset && !options.dryRun) {
+      await this.prisma.document.deleteMany({ where: { projectSlug: project.slug } });
+      await this.prisma.decision.deleteMany({ where: { projectSlug: project.slug } });
+      this.logger.log(`Reset: purged all indexed documents of "${project.slug}"`);
+    }
+
     let files: ScannedFile[];
     try {
       files = await this.scanner.scanFolder(folderPath);
@@ -113,10 +120,35 @@ export class IngestionOrchestrator {
       }
     }
 
-    if (!options.dryRun && stats.errors === 0) {
-      await this.writeRepo.setProjectIngestedAt(project.slug, new Date());
+    if (!options.dryRun) {
+      // Remove documents (and their Decision mirrors) whose files no longer
+      // exist on disk — e.g. after scanner exclusions change.
+      await this.pruneStaleDocuments(
+        project.slug,
+        files.map((file) => file.relativePath),
+      );
+      if (stats.errors === 0) {
+        await this.writeRepo.setProjectIngestedAt(project.slug, new Date());
+      }
     }
     return stats;
+  }
+
+  private async pruneStaleDocuments(projectSlug: string, livePaths: string[]): Promise<void> {
+    if (livePaths.length === 0) return;
+    const staleDocuments = await this.prisma.document.findMany({
+      where: { projectSlug, path: { notIn: livePaths } },
+      select: { id: true },
+    });
+    if (staleDocuments.length > 0) {
+      await this.prisma.document.deleteMany({
+        where: { projectSlug, path: { notIn: livePaths } },
+      });
+      await this.prisma.decision.deleteMany({
+        where: { projectSlug, sourcePath: { notIn: livePaths } },
+      });
+      this.logger.log(`Project "${projectSlug}": purged ${staleDocuments.length} stale documents`);
+    }
   }
 
   private async ingestFile(
@@ -155,6 +187,18 @@ export class IngestionOrchestrator {
     const classification = options.dryRun
       ? { category: 'general', categories: ['general'] }
       : await this.classifier.classify(documentText);
+
+    // Path specialization (spec §8.2.5) wins over the classifier primary label.
+    const pathRule = applyPathSpecialization(file.relativePath, documentText);
+    const category = pathRule?.category ?? classification.category;
+    const categories = pathRule
+      ? pathRule.categories && pathRule.categories.length > 0
+        ? pathRule.categories
+        : pathRule.mergeSemantic
+          ? Array.from(new Set([pathRule.category, ...classification.categories]))
+          : [pathRule.category]
+      : classification.categories;
+
     const summary = chunks[0]?.content.slice(0, 400) ?? '';
     const docType = mode;
     const named = basename(file.relativePath);
@@ -162,9 +206,19 @@ export class IngestionOrchestrator {
       ? 'README'
       : /^(CLAUDE|AGENTS)\.md$/.test(named)
         ? 'AGENT-GUIDE'
-        : mode === 'markdown'
-          ? 'MARKDOWN'
-          : 'TEXT';
+        : pathRule?.category === 'prompt'
+          ? 'PROMPT'
+          : mode === 'markdown'
+            ? 'MARKDOWN'
+            : 'TEXT';
+
+    const metadata = {
+      headings: chunks
+        .map((chunk) => chunk.heading)
+        .filter((h): h is string => Boolean(h))
+        .slice(0, 10),
+      ...(pathRule?.metadata ?? {}),
+    };
 
     const draft: DocumentDraft = {
       projectSlug: project.slug,
@@ -172,19 +226,14 @@ export class IngestionOrchestrator {
       title,
       summary,
       lang: detectLanguage(file.content),
-      category: classification.category,
-      categories: classification.categories,
+      category,
+      categories,
       docType,
       contentKind,
       sourceSha,
       charCount: file.content.length,
       tokenEstimate: Math.ceil(file.content.length / 4),
-      metadata: {
-        headings: chunks
-          .map((chunk) => chunk.heading)
-          .filter((h): h is string => Boolean(h))
-          .slice(0, 10),
-      },
+      metadata,
     };
 
     if (options.dryRun) {
@@ -219,5 +268,132 @@ export class IngestionOrchestrator {
     stats.documents += 1;
     stats.chunks += replaced.chunks.length;
     stats.embeddedChunks += replaced.chunks.length;
+
+    // ADR files (docs/decisions/*.md) are also mirrored into Decision rows.
+    if (this.isAdrPath(file.relativePath)) {
+      const adr = this.parseAdr(file.content, file.relativePath);
+      await this.writeRepo.replaceDecision({
+        projectSlug: project.slug,
+        sourcePath: file.relativePath,
+        title: adr.title,
+        status: adr.status,
+        summary: adr.summary,
+        content: file.content,
+      });
+    }
+  }
+
+  /**
+   * Re-runs the classifier (+ path rules) over already indexed documents
+   * without touching chunk content or embeddings — `hub classify`.
+   */
+  async reclassify(projectSlug?: string): Promise<{
+    projects: number;
+    documents: number;
+    updated: number;
+    unchanged: number;
+  }> {
+    const where = projectSlug ? { projectSlug } : {};
+    const docs = await this.prisma.document.findMany({
+      where,
+      select: {
+        id: true,
+        projectSlug: true,
+        path: true,
+        title: true,
+        category: true,
+        categories: true,
+        metadata: true,
+        chunks: { select: { content: true }, orderBy: { index: 'asc' as const } },
+      },
+    });
+    let updated = 0;
+    for (const doc of docs) {
+      const text = `${doc.title}\n\n${doc.chunks.map((c) => c.content).join('\n\n')}`.slice(
+        0,
+        3000,
+      );
+      const classification = await this.classifier.classify(text);
+      const pathRule = applyPathSpecialization(doc.path, text);
+      const category = pathRule?.category ?? classification.category;
+      const categories = pathRule
+        ? pathRule.categories && pathRule.categories.length > 0
+          ? pathRule.categories
+          : pathRule.mergeSemantic
+            ? Array.from(new Set([pathRule.category, ...classification.categories]))
+            : [pathRule.category]
+        : classification.categories;
+      const metadata = {
+        ...((doc.metadata as Record<string, unknown> | null) ?? {}),
+        ...(pathRule?.metadata ?? {}),
+      } as Prisma.InputJsonValue;
+      if (
+        doc.category === category &&
+        JSON.stringify(doc.categories) === JSON.stringify(categories) &&
+        JSON.stringify(doc.metadata ?? {}) === JSON.stringify(metadata)
+      ) {
+        continue;
+      }
+      await this.prisma.document.update({
+        where: { id: doc.id },
+        data: { category, categories, metadata },
+      });
+      updated += 1;
+    }
+    return {
+      projects: new Set(docs.map((d) => d.projectSlug)).size,
+      documents: docs.length,
+      updated,
+      unchanged: docs.length - updated,
+    };
+  }
+
+  /** Recomputes chunk embeddings in place — `hub reindex-embeddings`. */
+  async reindexEmbeddings(
+    projectSlug?: string,
+  ): Promise<{ chunks: number; embeddedChunks: number }> {
+    const chunks = await this.prisma.chunk.findMany({
+      where: projectSlug ? { document: { projectSlug } } : undefined,
+      select: { id: true, content: true },
+      orderBy: { documentId: 'asc' as const },
+    });
+    const batchSize = this.env.EMBEDDING_BATCH_SIZE;
+    let embeddedChunks = 0;
+    for (let offset = 0; offset < chunks.length; offset += batchSize) {
+      const batch = chunks.slice(offset, offset + batchSize);
+      const vectors = await this.embedding.embed(
+        batch.map((chunk) => chunk.content),
+        { prefix: 'passage' },
+      );
+      await upsertChunkEmbeddings(
+        this.prisma,
+        batch.map((chunk, i) => ({ id: chunk.id, vector: vectors[i] })),
+      );
+      embeddedChunks += batch.length;
+    }
+    return { chunks: chunks.length, embeddedChunks };
+  }
+
+  private isAdrPath(relativePath: string): boolean {
+    const norm = relativePath.replace(/\\/g, '/').toLowerCase();
+    return norm.endsWith('.md') && (norm.includes('/decisions/') || norm.startsWith('decisions/'));
+  }
+
+  private parseAdr(
+    content: string,
+    relativePath: string,
+  ): { title: string; status: 'accepted' | 'superseded' | 'proposed'; summary: string } {
+    const titleMatch = /^#\s+(.+)$/m.exec(content);
+    const title = titleMatch?.[1]?.trim() ?? basename(relativePath).replace(/\.[^.]+$/, '');
+    const statusMatch = /^\s*(?:status|estado)\s*[:：-]\s*(\w+)/im.exec(content);
+    const raw = statusMatch?.[1]?.toLowerCase() ?? 'accepted';
+    const status = raw === 'superseded' || raw === 'proposed' ? raw : 'accepted';
+    const body = content.replace(/^#\s+.+$/m, '').trim();
+    const summary = body
+      .split(/\n{2,}/)
+      .slice(0, 2)
+      .join('\n\n')
+      .slice(0, 400);
+    return { title, status, summary };
   }
 }
