@@ -6,14 +6,17 @@
 FROM node:22-bookworm-slim AS build
 WORKDIR /app
 
+# --ignore-scripts: o postinstall "prisma generate" precisa do schema, que é
+# copiado logo abaixo (a ordem importa no cache de camadas).
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN npm ci --ignore-scripts
 
 COPY tsconfig.json tsconfig.build.json nest-cli.json prisma.config.ts ./
 COPY prisma ./prisma
 RUN npx prisma generate
 
 COPY src ./src
+COPY scripts ./scripts
 RUN npm run build
 
 # ---------------------------------------------------------------------------
