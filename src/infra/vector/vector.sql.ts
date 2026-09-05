@@ -1,4 +1,5 @@
-import { PrismaService } from '../prisma/prisma.service.js';
+import type { PrismaService } from '../prisma/prisma.service.js';
+import { queryRows } from '../prisma/raw.js';
 
 /**
  * Raw SQL access to vector/tsvector/trigram columns (declared as
@@ -94,13 +95,13 @@ function filterSql(
 }
 
 /** Semantic search: cosine distance via HNSW index, score = 1 - distance. */
-export async function vectorSearch(
+export function vectorSearch(
   prisma: PrismaService,
   embedding: number[],
   filters: VectorSearchFilters,
 ): Promise<ChunkHitRow[]> {
   const params: unknown[] = [embedding];
-  const scoreExpr = `1 - (c.embedding <=> $1::vector)`;
+  const scoreExpr = '1 - (c.embedding <=> $1::vector)';
   const { where, minScoreClause, limitIndex } = filterSql(filters, params, scoreExpr, 2);
   const query = `
     SELECT ${CHUNK_SELECT}, ${scoreExpr} AS score
@@ -110,17 +111,18 @@ export async function vectorSearch(
     ORDER BY c.embedding <=> $1::vector
     LIMIT $${limitIndex}
   `;
-  return (await prisma.$queryRawUnsafe(query, ...params)) as ChunkHitRow[];
+  return queryRows<ChunkHitRow[]>(prisma, query, ...params);
 }
 
 /** Keyword search: Portuguese tsvector + ts_rank_cd over content. */
-export async function keywordSearch(
+export function keywordSearch(
   prisma: PrismaService,
   q: string,
   filters: VectorSearchFilters,
 ): Promise<ChunkHitRow[]> {
   const params: unknown[] = [q];
-  const scoreExpr = `ts_rank_cd(to_tsvector('portuguese', c.content), plainto_tsquery('portuguese', $1))`;
+  const scoreExpr =
+    "ts_rank_cd(to_tsvector('portuguese', c.content), plainto_tsquery('portuguese', $1))";
   const { where, minScoreClause, limitIndex } = filterSql(filters, params, scoreExpr, 2);
   const query = `
     SELECT ${CHUNK_SELECT}, ${scoreExpr} AS score
@@ -132,17 +134,17 @@ export async function keywordSearch(
     ORDER BY score DESC
     LIMIT $${limitIndex}
   `;
-  return (await prisma.$queryRawUnsafe(query, ...params)) as ChunkHitRow[];
+  return queryRows<ChunkHitRow[]>(prisma, query, ...params);
 }
 
 /** Fuzzy search: pg_trgm similarity over content. */
-export async function trigramSearch(
+export function trigramSearch(
   prisma: PrismaService,
   q: string,
   filters: VectorSearchFilters,
 ): Promise<ChunkHitRow[]> {
   const params: unknown[] = [q];
-  const scoreExpr = `similarity(c.content, $1)`;
+  const scoreExpr = 'similarity(c.content, $1)';
   const { where, minScoreClause, limitIndex } = filterSql(filters, params, scoreExpr, 2);
   const query = `
     SELECT ${CHUNK_SELECT}, ${scoreExpr} AS score
@@ -154,7 +156,7 @@ export async function trigramSearch(
     ORDER BY score DESC
     LIMIT $${limitIndex}
   `;
-  return (await prisma.$queryRawUnsafe(query, ...params)) as ChunkHitRow[];
+  return queryRows<ChunkHitRow[]>(prisma, query, ...params);
 }
 
 /** Bulk-persist chunk embeddings (batch). $1 = ids, $2 = vector literals. */
@@ -209,8 +211,9 @@ export async function clearDocumentEmbeddings(
 }
 
 export async function countEmbeddedChunks(prisma: PrismaService): Promise<number> {
-  const row = (await prisma.$queryRawUnsafe(
+  const rows = await queryRows<Array<{ count: number }>>(
+    prisma,
     'SELECT COUNT(*)::int AS count FROM chunks WHERE embedding IS NOT NULL',
-  )) as Array<{ count: number }>;
-  return row[0]?.count ?? 0;
+  );
+  return rows[0]?.count ?? 0;
 }

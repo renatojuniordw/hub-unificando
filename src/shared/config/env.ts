@@ -11,21 +11,16 @@ const boolFromEnv = (def: 'true' | 'false') =>
     .default(def)
     .transform((v) => v === 'true');
 
-const intFromEnv = (def: number) =>
-  z.coerce.number().int().min(0).default(def);
+const intFromEnv = (def: number) => z.coerce.number().int().min(0).default(def);
 
 const EnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: intFromEnv(11020),
-  DATABASE_URL: z
-    .string()
-    .default('postgresql://hub:hub@localhost:11022/hub_unificando'),
+  DATABASE_URL: z.string().default('postgresql://hub:hub@localhost:11022/hub_unificando'),
   REDIS_URL: z.string().default('redis://localhost:11023'),
   REDIS_ENABLED: boolFromEnv('true'),
   ADMIN_API_KEY: z.string().default(''),
-  HUB_SCAN_ROOT: z
-    .string()
-    .default('/Users/renatobezerra/Developer/Unificando Hub'),
+  HUB_SCAN_ROOT: z.string().default('/Users/renatobezerra/Developer/Unificando Hub'),
   EMBEDDING_MODEL: z.string().default('Xenova/multilingual-e5-base'),
   EMBEDDING_DIMS: intFromEnv(768),
   EMBEDDING_CACHE_DIR: z.string().default('/tmp/.transformers-cache'),

@@ -19,7 +19,16 @@ export default tseslint.config(
       },
       sourceType: 'commonjs',
       parserOptions: {
-        projectService: true,
+        projectService: {
+          allowDefaultProject: [
+            'prisma/seed.ts',
+            'prisma/seed/categories.ts',
+            'prisma/seed/registry.ts',
+            'prisma.config.ts',
+            'scripts/smoke-ingest.ts',
+            'scripts/classified.ts',
+          ],
+        },
         tsconfigRootDir: import.meta.dirname,
       },
     },

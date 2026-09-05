@@ -6,6 +6,10 @@ import { LoggerModule } from 'nestjs-pino';
 import { PrismaModule } from './infra/prisma/prisma.module';
 import { RedisModule } from './infra/redis/redis.module';
 import { HealthModule } from './modules/health/health.module';
+import { ProjectsModule } from './modules/projects/projects.module';
+import { DocumentsModule } from './modules/documents/documents.module';
+import { CategoriesModule } from './modules/categories/categories.module';
+import { DecisionsModule } from './modules/decisions/decisions.module';
 import { EnvModule } from './shared/config/env.module';
 import { ENV, type Env } from './shared/config/env';
 
@@ -31,6 +35,10 @@ import { ENV, type Env } from './shared/config/env';
     PrismaModule,
     RedisModule,
     HealthModule,
+    ProjectsModule,
+    DocumentsModule,
+    CategoriesModule,
+    DecisionsModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

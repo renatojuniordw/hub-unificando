@@ -9,28 +9,24 @@ export interface PaginationMeta {
 }
 
 export interface ApiSuccess<T> {
+  success: true;
   data: T;
   meta?: PaginationMeta;
-  requestId: string;
-  timestamp: string;
 }
 
 export interface ApiErrorBody {
+  success: false;
   error: {
     code: string;
-    status: number;
     message: string;
-    details?: unknown;
   };
-  requestId: string;
-  timestamp: string;
 }
 
 export const ERROR_CODES = {
   VALIDATION_ERROR: 'VALIDATION_ERROR',
   NOT_FOUND: 'NOT_FOUND',
   CONFLICT: 'CONFLICT',
-  ADMIN_REQUIRED: 'ADMIN_REQUIRED',
+  UNAUTHORIZED: 'UNAUTHORIZED',
   RATE_LIMITED: 'RATE_LIMITED',
   MCP_ERROR: 'MCP_ERROR',
   INTERNAL_ERROR: 'INTERNAL_ERROR',

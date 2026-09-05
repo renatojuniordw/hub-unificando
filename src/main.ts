@@ -45,11 +45,11 @@ async function bootstrap(): Promise<void> {
     .addBearerAuth()
     .build();
   const document = SwaggerModule.createDocument(app, swaggerConfig);
-  SwaggerModule.setup('docs', app, document);
+  SwaggerModule.setup('api/docs', app, document);
 
   await app.listen(env.PORT);
   app.get(Logger).log(`hub-unificando listening on ${env.PORT} (${env.NODE_ENV})`);
-  app.get(Logger).log(`Swagger UI at http://localhost:${env.PORT}/docs`);
+  app.get(Logger).log(`Swagger UI at http://localhost:${env.PORT}/api/docs`);
   app.get(Logger).log(`MCP Streamable HTTP at http://localhost:${env.PORT}${MCP_PATH}`);
 }
 

@@ -1,43 +1,47 @@
 import { CallHandler, ExecutionContext, Injectable, NestInterceptor } from '@nestjs/common';
-import { randomUUID } from 'node:crypto';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 import type { ApiSuccess, PaginationMeta } from '../api/response.js';
+
+interface Paginated {
+  data: unknown;
+  meta: PaginationMeta;
+}
 
 function isApiSuccess(payload: unknown): payload is ApiSuccess<unknown> {
   return (
     payload != null &&
     typeof payload === 'object' &&
-    'data' in payload &&
-    'requestId' in payload
+    'success' in payload &&
+    payload.success === true &&
+    'data' in payload
   );
 }
 
 /**
  * Wraps every controller response in the documented envelope:
- * `{ data, meta?, requestId, timestamp }`. Routes that return a raw
- * ApiSuccess (already wrapped) pass through untouched.
+ * `{ success: true, data, meta? }`. Already-wrapped payloads and paginated
+ * `{ data, meta }` results pass through/normalize accordingly.
  */
 @Injectable()
 export class TransformInterceptor implements NestInterceptor {
-  intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
-    const req = context.switchToHttp().getRequest();
-    const requestId = (req.headers['x-request-id'] as string | undefined) ?? randomUUID();
+  intercept(_context: ExecutionContext, next: CallHandler): Observable<unknown> {
     return next.handle().pipe(
       map((payload: unknown) => {
         if (isApiSuccess(payload)) {
           return payload;
         }
-        const result: ApiSuccess<unknown> = {
-          data: payload ?? null,
-          requestId,
-          timestamp: new Date().toISOString(),
-        };
-        if (payload && typeof payload === 'object' && 'meta' in payload) {
-          const meta = (payload as { meta?: PaginationMeta }).meta;
-          if (meta) result.meta = meta;
+        if (
+          payload != null &&
+          typeof payload === 'object' &&
+          'data' in payload &&
+          'meta' in payload &&
+          !('success' in payload)
+        ) {
+          const { data, meta } = payload as Paginated;
+          return { success: true, data, meta } satisfies ApiSuccess<unknown>;
         }
-        return result;
+        return { success: true, data: payload ?? null } satisfies ApiSuccess<unknown>;
       }),
     );
   }
