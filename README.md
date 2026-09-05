@@ -37,12 +37,13 @@ docker compose up -d db redis
 # 2. instalar e configurar
 npm install
 cp .env.example .env          # gere um ADMIN_API_KEY (openssl rand -base64 32)
-npm run prisma:migrate        # cria o schema + índices (HNSW/GIN/trgm)
+npm run prisma:migrate        # cria o schema + índices (HNSW/GIN/trgm); se nada mudou, não gera migration
 npm run prisma:seed           # 16 categorias + registry com os 7 projetos
-npm run hub -- seed-categories  # embeddings dos protótipos das categorias (1ª vez baixa o modelo)
+npm run build                 # necessário: CLI/seed-categories/MCP stdio rodam do dist (tsc, não tsx)
 
-# 3. ingerir o conhecimento do ecossistema (HUB_SCAN_ROOT no .env)
-npm run hub -- ingest         # ~482 docs / ~2100 chunks no ecossistema atual
+# 3. protótipos das categorias + ingestão do ecossistema (HUB_SCAN_ROOT no .env)
+npm run hub -- seed-categories  # embeddings dos protótipos (1ª vez baixa o modelo)
+npm run hub -- ingest           # ~480 docs / ~2200 chunks no ecossistema atual
 ```
 
 Rodar o servidor:
