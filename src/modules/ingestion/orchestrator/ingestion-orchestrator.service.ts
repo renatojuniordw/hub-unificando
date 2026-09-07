@@ -1,4 +1,4 @@
-import { join, basename } from 'node:path';
+import { basename } from 'node:path';
 import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import type { Prisma, Project } from '../../../generated/prisma/client.js';
 import { PrismaService } from '../../../infra/prisma/prisma.service';
@@ -9,6 +9,7 @@ import { ClassifierService } from '../../classification/classifier.service';
 import { applyPathSpecialization } from '../../classification/path-specialization';
 import { ChunkService } from '../chunking/chunk.service';
 import { detectLanguage } from '../parsing/sections';
+import { resolveKnowledgeLibRoot, resolveProjectRoot } from '../scan/project-source';
 import { ScannerService, type ScannedFile } from '../scan/scanner.service';
 import {
   IngestionWriteRepository,
@@ -75,11 +76,13 @@ export class IngestionOrchestrator {
     project: Project,
     options: IngestOptions,
   ): Promise<Omit<IngestStats, 'projects'>> {
-    // Absolute folderPaths (tests/fixtures) win; relative ones resolve
-    // against HUB_SCAN_ROOT (production layout).
-    const folderPath = project.folderPath.startsWith('/')
-      ? project.folderPath
-      : join(this.env.HUB_SCAN_ROOT, project.folderPath);
+    // Absolute folderPaths (tests/fixtures) win; relative ones resolve to the
+    // committed knowledge lib (KNOWLEDGE_LIB_ROOT/<slug>) when mirrored there,
+    // otherwise fall back to the sibling projects under HUB_SCAN_ROOT.
+    const source = await resolveProjectRoot(project, {
+      knowledgeLibRoot: resolveKnowledgeLibRoot(this.env.KNOWLEDGE_LIB_ROOT),
+      scanRoot: this.env.HUB_SCAN_ROOT,
+    });
     const stats = {
       documents: 0,
       chunks: 0,
@@ -96,17 +99,17 @@ export class IngestionOrchestrator {
 
     let files: ScannedFile[];
     try {
-      files = await this.scanner.scanFolder(folderPath);
+      files = await this.scanner.scanFolder(source.path);
     } catch (error) {
       this.logger.error(
         `Project "${project.slug}" scan failed`,
         error instanceof Error ? error.stack : undefined,
       );
-      return { ...stats, errors: 1, errorsByPath: [project.folderPath] };
+      return { ...stats, errors: 1, errorsByPath: [source.path] };
     }
 
     this.logger.log(
-      `Ingesting "${project.slug}" (${files.length} files, dryRun=${options.dryRun ?? false})`,
+      `Ingesting "${project.slug}" from ${source.kind} (${files.length} files, dryRun=${options.dryRun ?? false})`,
     );
     for (const file of files) {
       try {

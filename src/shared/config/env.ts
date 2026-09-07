@@ -21,6 +21,9 @@ const EnvSchema = z.object({
   REDIS_ENABLED: boolFromEnv('true'),
   ADMIN_API_KEY: z.string().default(''),
   HUB_SCAN_ROOT: z.string().default('/Users/renatobezerra/Developer/Unificando Hub'),
+  // Committed knowledge lib: docs mirrored per project slug (relative to cwd
+  // or absolute). Ingestion prefers KNOWLEDGE_LIB_ROOT/<slug> over siblings.
+  KNOWLEDGE_LIB_ROOT: z.string().default('knowledge'),
   EMBEDDING_MODEL: z.string().default('Xenova/multilingual-e5-base'),
   EMBEDDING_DIMS: intFromEnv(768),
   EMBEDDING_CACHE_DIR: z.string().default('/tmp/.transformers-cache'),

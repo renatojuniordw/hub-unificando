@@ -14,12 +14,12 @@ forma pronta para humanos, agentes e LLMs.
 | Área | Como |
 |---|---|
 | Registry de projetos | 7 projetos do ecossistema com stack real, tags e contagens (`GET /api/v1/projects`) |
-| Ingestão | Scanner → parsers markdown/txt → chunking (800–1500 chars) → classificação → embeddings on-device → pgvector |
+| Ingestão | Knowledge lib commitada (`knowledge/<slug>`) → Scanner (escopo curado: docs + README/CLAUDE/AGENTS + prompts) → chunking (800–1500 chars) → classificação → embeddings on-device → pgvector |
 | Busca híbrida | Vetorial (HNSW cosine) + keyword (tsvector `portuguese`) + fuzzy (pg_trgm), fundidos por **RRF ponderado** (0.40/0.35/0.25, k=60) |
 | Classificação | 16 categorias; regras determinísticas (keywords) → semântica (protótipos) → fallback `general` |
 | Contexto p/ LLM | Pacotes otimizados por orçamento de tokens (`GET /api/v1/context/export`) |
 | MCP | Servidor **Streamable HTTP** em `/mcp` + modo **stdio** com 12 tools declarativas |
-| CLI | `hub ingest`, `hub search`, `hub context`, `hub compare`, `hub summary`, `hub classify`, `hub seed-categories`, `hub scan`, `hub status` |
+| CLI | `hub sync-docs`, `hub ingest`, `hub search`, `hub context`, `hub compare`, `hub summary`, `hub classify`, `hub seed-categories`, `hub scan`, `hub status` |
 | Admin | Ingestão assíncrona via BullMQ/Redis (`POST /api/v1/ingest/jobs`) |
 
 ## Stack
@@ -41,10 +41,18 @@ npm run prisma:migrate        # cria o schema + índices (HNSW/GIN/trgm); se nad
 npm run prisma:seed           # 16 categorias + registry com os 7 projetos
 npm run build                 # necessário: CLI/seed-categories/MCP stdio rodam do dist (tsc, não tsx)
 
-# 3. protótipos das categorias + ingestão do ecossistema (HUB_SCAN_ROOT no .env)
+# 3. protótipos das categorias + sincronizar a knowledge lib + ingestão
 npm run hub -- seed-categories  # embeddings dos protótipos (1ª vez baixa o modelo)
-npm run hub -- ingest           # ~480 docs / ~2200 chunks no ecossistema atual
+npm run hub -- sync-docs        # espelha os irmãos (HUB_SCAN_ROOT) em knowledge/<slug>; commite o resultado
+npm run hub -- ingest           # lê da lib: ~80 docs curados / ~400 chunks
 ```
+
+A **knowledge lib** (`knowledge/<slug>`, um folder por repositório) é o espelho
+commitado dos arquivos de conhecimento de cada projeto — `docs/` +
+README/CLAUDE/AGENTS na raiz + `prompts/`. É o que torna o Hub **autônomo**:
+`git clone` + `hub ingest` reconstroem o índice em qualquer lugar (VPS
+inclusive), sem depender dos repositórios irmãos. Em dev, rode `hub sync-docs`
+quando os irmãos mudarem e commite o diff.
 
 Rodar o servidor:
 
@@ -102,6 +110,7 @@ prisma/
   schema.prisma          # data model (projetos/doc/chunks/categorias/decisões)
   migrations/            # inclui índices HNSW/GIN/pg_trgm
   seed.ts                # categorias + registry
+knowledge/               # lib commitada: docs dos 7 projetos (gerada por `hub sync-docs`)
 docs/                    # documentação técnica + ADRs
 ```
 
@@ -113,7 +122,7 @@ docs/                    # documentação técnica + ADRs
 | [docs/API.md](docs/API.md) | Endpoints REST, envelope, exemplos reais |
 | [docs/MCP.md](docs/MCP.md) | Transportes, 12 tools, segurança, config de clientes |
 | [docs/DATA-MODEL.md](docs/DATA-MODEL.md) | Modelo de dados e índices |
-| [docs/INGESTION.md](docs/INGESTION.md) | Pipeline scanner→chunks→embeddings |
+| [docs/INGESTION.md](docs/INGESTION.md) | Knowledge lib, resolução da fonte e pipeline scanner→chunks→embeddings |
 | [docs/SEARCH.md](docs/SEARCH.md) | Busca híbrida + RRF |
 | [docs/CLASSIFICATION.md](docs/CLASSIFICATION.md) | Taxonomia e classificador |
 | [docs/CONTEXT.md](docs/CONTEXT.md) | Pacotes de contexto para LLM |

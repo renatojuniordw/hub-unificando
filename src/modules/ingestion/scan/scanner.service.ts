@@ -1,11 +1,8 @@
 import { access, readdir, readFile } from 'node:fs/promises';
 import { join, sep } from 'node:path';
 import { Injectable, Logger } from '@nestjs/common';
-import {
-  INDEXABLE_EXTENSIONS,
-  INDEXABLE_NAMES,
-  SCAN_EXCLUDED_DIRS,
-} from '../../../shared/constants';
+import { SCAN_EXCLUDED_DIRS } from '../../../shared/constants';
+import { isKnowledgePath } from './knowledge-path';
 
 export interface ScannedFile {
   /** Path relative to the project root (POSIX separators). */
@@ -16,8 +13,10 @@ export interface ScannedFile {
 }
 
 /**
- * Filesystem scanner honoring the exclusion list. Only markdown/txt files and
- * the special CLAUDE.md/AGENTS.md names are indexed (docs/INGESTION.md).
+ * Filesystem scanner honoring the exclusion list. Only curated "knowledge"
+ * files are indexed — docs/documentation folders at any depth, README/CLAUDE/
+ * AGENTS at the project root and root `prompts/`, always `.md/.mdx/.txt`
+ * (see knowledge-path.ts and docs/INGESTION.md).
  */
 @Injectable()
 export class ScannerService {
@@ -66,8 +65,8 @@ export class ScannerService {
       const segments = rel.split(sep);
       const excluded = segments.some((segment) => SCAN_EXCLUDED_DIRS.includes(segment));
       if (excluded) continue;
-      if (!this.isIndexable(entry.name)) continue;
       const relativePath = rel.split(sep).join('/');
+      if (!isKnowledgePath(relativePath)) continue;
       const absolutePath = join(root, relativePath);
       try {
         const content = await readFile(absolutePath, 'utf8');
@@ -103,12 +102,5 @@ export class ScannerService {
         entry.isDirectory() &&
         (entry.name === 'docs' || entry.name === 'documentation' || entry.name === 'documentacao'),
     );
-  }
-
-  private isIndexable(name: string): boolean {
-    if (INDEXABLE_NAMES.has(name)) return true;
-    const dot = name.lastIndexOf('.');
-    if (dot <= 0) return false;
-    return INDEXABLE_EXTENSIONS.has(name.slice(dot).toLowerCase());
   }
 }

@@ -19,6 +19,10 @@ COPY src ./src
 COPY scripts ./scripts
 RUN npm run build
 
+# Knowledge lib (committed docs) goes into the image build context; copy it
+# here too so the runtime stage can COPY it without a second context fetch.
+COPY knowledge ./knowledge
+
 # ---------------------------------------------------------------------------
 # Stage 2: runtime (non-root, migrations/seed no primeiro boot)
 # ---------------------------------------------------------------------------
@@ -33,6 +37,8 @@ RUN useradd --create-home --uid 1001 hubuser
 COPY --from=build --chown=hubuser:hubuser /app/node_modules ./node_modules
 COPY --from=build --chown=hubuser:hubuser /app/dist ./dist
 COPY --from=build --chown=hubuser:hubuser /app/prisma ./prisma
+# Knowledge lib commitada — fonte da ingestão (KNOWLEDGE_LIB_ROOT=/app/knowledge).
+COPY --from=build --chown=hubuser:hubuser /app/knowledge ./knowledge
 COPY --chown=hubuser:hubuser package.json prisma.config.ts ./
 COPY --chown=hubuser:hubuser docker/entrypoint.sh ./docker/entrypoint.sh
 RUN chmod +x docker/entrypoint.sh

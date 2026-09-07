@@ -92,5 +92,10 @@ Global modules: `EnvModule`, `PrismaModule`, `RedisModule`.
 | prompts-unificando | `SITE_HIGH_CONVERSION_ARQUITETURA` | biblioteca de prompts |
 | promptcraft-unificando | `unificando-promptgen` | CLI gerador de prompts |
 
-`HUB_SCAN_ROOT` aponta para a pasta-pai com esses projetos; `folderPath` é
-relativo e o `RegistryScanService` também descobre novos projetos.
+`HUB_SCAN_ROOT` aponta para a pasta-pai com esses projetos e o
+`RegistryScanService` também descobre novos projetos (metadata apenas). A
+**ingestão** resolve a fonte em três camadas (`project-source.ts`): absolute
+`folderPath` (fixtures) → knowledge lib commitada `knowledge/<slug>`
+(`KNOWLEDGE_LIB_ROOT`, default `knowledge` relativo à raiz do repo) →
+`HUB_SCAN_ROOT/<folderPath>` como fallback dev. A lib é o espelho commitado
+por slug dos arquivos de conhecimento de cada projeto — ver ADR 0009.

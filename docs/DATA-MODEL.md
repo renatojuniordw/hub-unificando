@@ -25,7 +25,7 @@ ORM** — only ever touched through raw SQL in `src/infra/vector/vector.sql.ts`
 | `slug` | String @id | PK; registry id + scan folder name |
 | `name` / `description` | String | display + one-liner |
 | `repoUrl` | String? | git remote when declared |
-| `folderPath` | String | absolute, or **relative to `HUB_SCAN_ROOT`** (resolved at ingest) |
+| `folderPath` | String | absolute (fixtures), or **relative to `HUB_SCAN_ROOT`** as a fallback; ingestion resolves the source in three layers: absolute → knowledge lib `knowledge/<slug>` → scan root (see `project-source.ts` and ADR 0009) |
 | `stack` | Json? | `[{ name, version, role }]` from `package.json` |
 | `tags` | String[] | free-form |
 | `sourceType` | String | default `"local"` (`local` \| `git`) |

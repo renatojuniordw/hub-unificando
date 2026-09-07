@@ -23,13 +23,16 @@ Environment injected into `app` (all overridable from the shell):
 - `NODE_ENV=production`, `PORT=11020`
 - `DATABASE_URL=postgresql://hub:hub@db:5432/hub_unificando`
 - `REDIS_URL=redis://redis:6379`, `REDIS_ENABLED=true`
-- `HUB_SCAN_ROOT=/workspace/projects`
+- `KNOWLEDGE_LIB_ROOT=/app/knowledge` (the committed knowledge lib baked into
+  the image — the ingestion source; dev default is `knowledge` relative to the
+  repo root)
 - `EMBEDDING_MODEL`/`EMBEDDING_DIMS`/`EMBEDDING_CACHE_DIR` (defaults
   `Xenova/multilingual-e5-base` / `768` / `/tmp/.transformers-cache`)
 - `ADMIN_API_KEY`, `MCP_API_KEY`, `MCP_ENABLE_JSON_RESPONSE`,
   `MCP_SESSION_TTL_MIN`, `MCP_RATE_LIMIT` (passed through, empty by default)
 
-Sibling projects are mounted **read-only** at `/workspace/projects`:
+In local dev (`docker-compose.yml`) the sibling projects are mounted
+**read-only** at `/workspace/projects`:
 
 ```yaml
 - /Users/renatobezerra/Developer/Unificando Hub:/workspace/projects:ro
@@ -45,8 +48,9 @@ Sibling projects are mounted **read-only** at `/workspace/projects`:
 - **Stage `runtime`** —
   - Creates **non-root** `hubuser` (**UID 1001**) and runs as it.
   - Copies `node_modules` (the **full** tree: the entrypoint uses the `prisma`
-    CLI and `tsx` for first-boot migrate/seed), `dist`, `prisma`,
-    `package.json`, `prisma.config.ts` and `docker/entrypoint.sh`.
+    CLI and `tsx` for first-boot migrate/seed), `dist`, `prisma`, the
+    **knowledge lib** (`knowledge/`), `package.json`, `prisma.config.ts` and
+    `docker/entrypoint.sh`.
   - `ENV NODE_ENV=production`, `EXPOSE 11020`,
     `ENTRYPOINT ["docker/entrypoint.sh"]`.
 
@@ -65,13 +69,36 @@ serving traffic:
 3. `node dist/scripts/seed-categories.js` — compute category prototype
    embeddings. Failure is tolerated with a warning ("as ferramentas seguirão
    por regras") because the model download needs network on first run.
-4. `exec node dist/src/main.js` — replace the shell and start API + MCP.
+4. `node dist/src/cli.js ingest` — first ingestion **from the committed
+   knowledge lib** (`KNOWLEDGE_LIB_ROOT=/app/knowledge`). Idempotent (sha256
+   dedupe + `pruneStaleDocuments`); a failed ingest does not stop the boot —
+   re-run manually with `docker compose -f docker-compose.prod.yml exec app
+   node dist/src/cli.js ingest`.
+5. `exec node dist/src/main.js` — replace the shell and start API + MCP.
 
 Consequences: the app container self-provisions a fresh database; repeated
-restarts are cheap because `migrate deploy`/seeds are idempotent. The cost is
-that the container must contain the full `node_modules` (no `--omit=dev`) and
-needs outbound network the first time the model is downloaded (cached in the
-`transformers-cache` volume).
+restarts are cheap because `migrate deploy`/seeds/ingest are idempotent. The
+cost is that the container must contain the full `node_modules` (no
+`--omit=dev`) and needs outbound network the first time the model is
+downloaded (cached in the `transformers-cache` volume).
+
+## Production / VPS (`docker-compose.prod.yml`)
+
+The Hub is **autonomous**: no sibling repositories, no uploaded artifacts. All
+knowledge travels inside the image (`knowledge/` committed docs → copied into
+`/app/knowledge`). Updating the index = push a commit that updates
+`knowledge/`, then rebuild:
+
+```bash
+# on dev: re-mirror the siblings and commit the lib diff
+npm run hub -- sync-docs
+git add knowledge && git commit -m "docs: sync knowledge lib"
+
+# on the VPS
+docker compose -f docker-compose.prod.yml up -d --build
+docker compose -f docker-compose.prod.yml logs -f app      # first boot ingests
+docker compose -f docker-compose.prod.yml exec app node dist/src/cli.js status
+```
 
 ## Local development
 
@@ -88,7 +115,8 @@ npm run prisma:migrate      # prisma migrate dev (creates the init migration DB)
 npm run prisma:seed         # 16 categories + 7 registry projects
 npm run hub -- seed-categories   # prototype embeddings (downloads the model once)
 
-# 4. ingest the ecosystem from HUB_SCAN_ROOT
+# 4. mirror the siblings into the knowledge lib + ingest (reads from the lib)
+npm run hub -- sync-docs    # knowledge/<slug>/; commit the result when it changes
 npm run hub -- ingest
 
 # 5. run the server
@@ -153,5 +181,6 @@ never data loss.
       publishing entirely)
 - [ ] Pin image digests and PG/Redis minors; keep `npm audit --audit-level=high`
       green in CI
-- [ ] Read-only workspace mount; write the model cache volume
+- [ ] Knowledge lib commitada na imagem (`knowledge/` → `KNOWLEDGE_LIB_ROOT`);
+      write the model cache volume
 - [ ] Scheduled `pg_dump` (see above) with retention

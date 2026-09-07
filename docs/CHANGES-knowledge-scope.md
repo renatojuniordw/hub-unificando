@@ -1,6 +1,9 @@
 # Mudança: escopo de conhecimento = docs + README/CLAUDE/AGENTS + prompts
 
-> Plano de mudança (para aplicar posteriormente). Não foi implementado.
+> **IMPLEMENTADO (ver ADR 0009-knowledge-lib.md, `knowledge-path.ts` e
+> `docs/INGESTION.md`).** Este documento é o registro histórico da decisão de
+> escopo; a implementação substituiu o `export-knowledge`/`sync` por
+> `hub sync-docs` + knowledge lib commitada.
 
 ## Contexto / problema
 
@@ -23,9 +26,9 @@ Resultado esperado: **~80 arquivos** curados por projeto:
 ui 9 · med 13 · pdf 14 · radar-app 17 · radar-ext 6 · prompts-unificando 14 ·
 promptcraft 7.
 
-Isso também deixa o "knowledge bundle" (deploy VPS) com ~80 arquivos.
+Isso também deixa a knowledge lib (deploy VPS) com ~80 arquivos.
 
-## Mudanças propostas
+## Mudanças implementadas
 
 ### 1. Regra de conhecimento curado (núcleo)
 
@@ -38,72 +41,49 @@ export function isKnowledgePath(relativePath: string): boolean
 //   raiz: segs.length === 1 && KNOWLEDGE_ROOT_NAMES.has(segs[0])
 //   docs: segs.includes('docs') || segs.includes('documentation')
 //   prompts na raiz: segs[0] === 'prompts'
+//   + extensão obrigatória .md/.mdx/.txt (decidida dentro da função)
 ```
 
 **`src/modules/ingestion/scan/scanner.service.ts`**: para cada arquivo
 candidato (após as exclusions atuais: blocklist, dot-dirs, dotfiles, repos
-aninhados), decidir com `isKnowledgePath(relativePath)` **+ extensão**
-`.md/.mdx/.txt`. Substitui o `isIndexable`/`INDEXABLE_EXTENSIONS` genérico
-("qualquer lugar"). O `public/` continua navegável quando tem subpasta de
-docs, mas o arquivo só entra se `isKnowledgePath` (ex.: `public/llms.txt`
-sai; `public/docs/x.md` entra).
+aninhados), decidir com `isKnowledgePath(relativePath)`. Substituiu o
+`isIndexable`/`INDEXABLE_EXTENSIONS` genérico ("qualquer lugar"). O `public/`
+continua navegável quando tem subpasta de docs, mas o arquivo só entra se
+`isKnowledgePath` (ex.: `public/llms.txt` sai; `public/docs/x.md` entra).
 
-Limpeza: remover `INDEXABLE_EXTENSIONS`/`INDEXABLE_NAMES` de
-`src/shared/constants.ts` se não houver mais usos (grep antes). Ajustar o
-docblock do scanner.
+Limpeza: `INDEXABLE_EXTENSIONS`/`INDEXABLE_NAMES` removidos de
+`src/shared/constants.ts` (sem outros usos). Docblock do scanner atualizado.
 
-### 2. Dry-run reporta o que seria purgado
+### 2. Knowledge lib commitada (substituiu o knowledge bundle)
 
-- `IngestStats` (`src/modules/ingestion/ingestion.types.ts`): adicionar
-  `staleDocuments?: number`.
-- Em dry-run, `ingestProject` computa os paths no DB que não estão nos paths
-  vivos do scan e os **loga** (nada é deletado em dry-run).
+O escopo curado alimenta uma **lib commitada** (`knowledge/<slug>`) espelhada
+dos irmãos via `hub sync-docs`; a ingestão lê da lib primeiro e só cai para
+`HUB_SCAN_ROOT` como fallback (dev). O fluxo antigo de
+`export-knowledge`/`sync` (tar.gz + serviço `sync` no compose prod) foi
+removido. Detalhes no ADR 0009 e em `docs/INGESTION.md`.
 
-Fluxo de aplicação: `hub ingest --dry-run` (mostra `staleDocuments` + lista)
-→ revisar → `hub ingest` (o `pruneStaleDocuments` já existente purga os
-órfãos e mirrors de decisão) → `hub status`.
+### 3. Dry-run reporta o que seria purgado
 
-### 3. Testes
+*(Não implementado nesta rodada — a convergência acontece no `hub ingest`
+real via `pruneStaleDocuments`, que já existia.)*
+
+### 4. Testes
 
 - **`src/modules/ingestion/scan/knowledge-path.spec.ts`** (novo): raiz
   README/CLAUDE/AGENTS ✓ · `notes.md` na raiz ✗ · `docs/a.md`,
   `docs/sub/x.md` ✓ · `x/docs/y.md` ✓ · `prompts/base.md` ✓ ·
   `src/docs.ts` (extensão errada) ✗ · `public/llms.txt` ✗ ·
   `public/docs/index.md` ✓.
-- **`scanner.service.spec.ts`**: atualizar a fixture (ex.: `notes.md` na raiz
-  esperando NÃO entrar; manter docs/ e README entrando).
-
-### 4. Docs
-
-- `docs/INGESTION.md`: regra de escopo (docs/documentation + README/CLAUDE/
-  AGENTS na raiz + prompts/) e convergência do índice (purga a cada ingest).
-- `README.md`: contagem aproximada (~80 docs; bundle com esses arquivos).
-
-## Arquivos críticos
-
-- `src/modules/ingestion/scan/scanner.service.ts`
-- `src/modules/ingestion/scan/knowledge-path.ts` (novo)
-- `src/modules/ingestion/scan/knowledge-path.spec.ts` (novo)
-- `src/modules/ingestion/scan/scanner.service.spec.ts`
-- `src/modules/ingestion/orchestrator/ingestion-orchestrator.service.ts`
-  (dry-run reporta stale; `pruneStaleDocuments` já existe em
-  ingestion-orchestrator.service.ts:131)
-- `src/modules/ingestion/ingestion.types.ts`
-- `src/shared/constants.ts`
-- `docs/INGESTION.md`, `README.md`
+- **`scanner.service.spec.ts`**: fixture atualizada (`notes.md` na raiz NÃO
+  entra; `docs/notes.md` entra; `webp.bin` fora).
 
 ## Verificação
 
-1. `npm run test` (knowledge-path + scanner + demais suites).
-2. `npm run build` e `npm run lint`.
-3. `npm run hub -- ingest --dry-run` → mostra `staleDocuments` (~416) e a
-   lista do que sairia (ex.: `radar-unificando/testid-plan.md`,
-   `ui-unificando/unificando-cro-redesign.md`, `public/llms.txt`).
-4. `npm run hub -- ingest` → purga; `hub status` ≈ 80 docs / ~400 chunks;
-   busca continua retornando (ex.: "busca hibrida pgvector" → med
-   `docs/DATABASE.md`).
-5. `npm run hub -- export-knowledge --out /tmp/kb.tar.gz` → bundle ~80
-   arquivos; teste do sync simulando VPS
-   (`HUB_SCAN_ROOT=/tmp/vps-test KNOWLEDGE_BUNDLE_PATH=/tmp/kb.tar.gz node
-   dist/src/cli.js sync`) → extrai e ingere (skipped) sem efeito no banco.
-6. `npm run test:e2e` (docs/DATABASE.md de med/radar continuam indexados).
+1. `npm run test`, `npm run build`, `npm run lint` — verdes.
+2. `npm run hub -- sync-docs --dry-run` → 7 projetos, 80 arquivos.
+3. `npm run hub -- sync-docs` → gera `knowledge/<slug>/` (80 arquivos).
+4. `npm run hub -- ingest` → converge (purga órfãos do escopo antigo);
+   `hub status` ≈ 80 docs / ~400 chunks.
+5. Simulação VPS só com a lib:
+   `HUB_SCAN_ROOT=/tmp/empty KNOWLEDGE_LIB_ROOT=<repo>/knowledge node
+   dist/src/cli.js ingest`.

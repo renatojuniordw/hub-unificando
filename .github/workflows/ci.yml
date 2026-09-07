@@ -65,13 +65,13 @@ jobs:
           POSTGRES_USER: hub
           POSTGRES_PASSWORD: hub
           POSTGRES_DB: hub_unificando
-        ports: ["5432:5432"]
+        ports: ['5432:5432']
         options: >-
           --health-cmd "pg_isready -U hub -d hub_unificando"
           --health-interval 5s --health-timeout 5s --health-retries 10
       redis:
         image: redis:7-alpine
-        ports: ["6379:6379"]
+        ports: ['6379:6379']
     steps:
       - uses: actions/checkout@v4
         with:
@@ -90,10 +90,15 @@ jobs:
         run: |
           mkdir -p /tmp/ecosystem
           git clone --depth 1 https://github.com/renatojuniordw/ui-unificando.git /tmp/ecosystem/ui-unificando
+          # Empty knowledge lib: the smoke must ingest from the fresh sibling
+          # clone above (resolution falls back to HUB_SCAN_ROOT), not from the
+          # committed knowledge/ folder baked into this repo.
+          mkdir -p /tmp/knowledge-lib-empty
       - name: Smoke ingestion (real model)
         run: node dist/scripts/smoke-ingest.js ui-unificando
         env:
           HUB_SCAN_ROOT: /tmp/ecosystem
+          KNOWLEDGE_LIB_ROOT: /tmp/knowledge-lib-empty
           EMBEDDING_CACHE_DIR: /tmp/.transformers-cache
       - name: Registry status
         run: node dist/src/cli.js status

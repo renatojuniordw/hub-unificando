@@ -1,16 +1,15 @@
 # docker-compose para VPS — sem dependência dos repositórios irmãos.
 #
-# O conhecimento chega como "knowledge bundle" (knowledge-bundle.tar.gz),
-# gerado na máquina dev com `npm run hub -- export-knowledge` e colocado no
-# volume `bundle-data` (ex.: docker compose -f docker-compose.prod.yml cp
-# knowledge-bundle.tar.gz app:/data/bundle/ ou upload + docker cp). O serviço
-# `sync` extrai o bundle e ingere em loop (cron); quando você sobe um bundle
-# novo, o próximo tick detecta e atualiza o índice.
+# O conhecimento viaja DENTRO da imagem: o Dockerfile copia a knowledge lib
+# commitada (`knowledge/<slug>`, gerada no dev com `npm run hub -- sync-docs`
+# e commitada no git) para /app/knowledge. No primeiro boot o entrypoint roda
+# migrate + seed + seed-categories e depois `hub ingest`, que lê da lib
+# (KNOWLEDGE_LIB_ROOT=/app/knowledge). Para atualizar o índice: commit novo da
+# lib + `docker compose -f docker-compose.prod.yml up -d --build` (o ingest é
+# idempotente; também dá para reexecutar via exec).
 #
 # Uso:
 #   docker compose -f docker-compose.prod.yml up -d --build
-#   docker compose -f docker-compose.prod.yml cp ./knowledge-bundle.tar.gz app:/data/bundle/knowledge-bundle.tar.gz
-#   docker compose -f docker-compose.prod.yml restart sync   # força um sync imediato
 services:
   db:
     image: pgvector/pgvector:pg16
@@ -22,7 +21,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U hub -d hub_unificando"]
+      test: ['CMD-SHELL', 'pg_isready -U hub -d hub_unificando']
       interval: 10s
       timeout: 5s
       retries: 10
@@ -30,11 +29,11 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes"]
+    command: ['redis-server', '--appendonly', 'yes']
     volumes:
       - redisdata:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ['CMD', 'redis-cli', 'ping']
       interval: 10s
       timeout: 5s
       retries: 10
@@ -51,11 +50,11 @@ services:
         condition: service_healthy
     environment:
       NODE_ENV: production
-      PORT: "11020"
+      PORT: '11020'
       DATABASE_URL: postgresql://hub:${POSTGRES_PASSWORD:-hub}@db:5432/hub_unificando
       REDIS_URL: redis://redis:6379
-      REDIS_ENABLED: "true"
-      HUB_SCAN_ROOT: /data/knowledge
+      REDIS_ENABLED: 'true'
+      KNOWLEDGE_LIB_ROOT: /app/knowledge
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-Xenova/multilingual-e5-base}
       EMBEDDING_DIMS: ${EMBEDDING_DIMS:-768}
       EMBEDDING_CACHE_DIR: /data/.transformers-cache
@@ -66,55 +65,24 @@ services:
       MCP_RATE_LIMIT: ${MCP_RATE_LIMIT:-120}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:11020}
     ports:
-      - "${HUB_PORT:-11020}:11020"
+      - '${HUB_PORT:-11020}:11020'
     volumes:
-      - knowledge:/data/knowledge
+      # The committed knowledge lib is baked into the image; only the on-device
+      # model cache needs to survive restarts.
       - transformers-cache:/data/.transformers-cache
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://localhost:11020/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://localhost:11020/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
       interval: 20s
       timeout: 10s
       retries: 6
 
-  # Cron de ingestão: extrai o knowledge bundle e re-ingere (incremental).
-  # SYNC_INTERVAL_SECONDS controla o intervalo (default 6h). Roda só depois
-  # do app ficar healthy (evita corrida com o seed-categories do entrypoint).
-  sync:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    restart: unless-stopped
-    command:
-      - sh
-      - -c
-      - |
-        while true; do
-          echo "[sync] tick: extraindo bundle + ingestão incremental"
-          node dist/src/cli.js sync
-          echo "[sync] done; próximo tick em ${SYNC_INTERVAL_SECONDS:-21600}s"
-          sleep ${SYNC_INTERVAL_SECONDS:-21600}
-        done
-    depends_on:
-      app:
-        condition: service_healthy
-    environment:
-      NODE_ENV: production
-      DATABASE_URL: postgresql://hub:${POSTGRES_PASSWORD:-hub}@db:5432/hub_unificando
-      REDIS_URL: redis://redis:6379
-      REDIS_ENABLED: "true"
-      HUB_SCAN_ROOT: /data/knowledge
-      KNOWLEDGE_BUNDLE_PATH: /data/bundle/knowledge-bundle.tar.gz
-      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-Xenova/multilingual-e5-base}
-      EMBEDDING_DIMS: ${EMBEDDING_DIMS:-768}
-      EMBEDDING_CACHE_DIR: /data/.transformers-cache
-    volumes:
-      - knowledge:/data/knowledge
-      - bundle-data:/data/bundle
-      - transformers-cache:/data/.transformers-cache
-
 volumes:
   pgdata:
   redisdata:
-  knowledge:
-  bundle-data:
   transformers-cache:

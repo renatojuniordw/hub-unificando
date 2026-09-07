@@ -1,0 +1,111 @@
+# Radar Unificando — Extensão Chrome
+
+Extensão de Chrome (Manifest V3) que analisa a vaga aberta na página atual e
+mostra dicas de ajuste do currículo para passar em triagens de ATS. Usa o
+**Side Panel** do Chrome: o painel fica na lateral do navegador, acompanha a
+aba ativa e re-analisa automaticamente quando você troca de vaga.
+
+Reaproveita a análise ATS do backend do Radar Unificando
+(`POST /api/extension/analyze`).
+
+## Funcionalidades
+
+- **Side Panel** — painel lateral persistente; abre com um clique no ícone.
+- **Análise ATS** — score (0–100), pontos fortes, skills faltando, dicas e
+  checklist do currículo.
+- **Score por skill** — barra de aderência por tecnologia, com sugestões.
+- **Re-análise automática** — acompanha a aba ativa; re-analisa ao trocar de
+  vaga (navegação SPA), mudar a URL ou o conteúdo da página.
+- **Botão "Reanalisar"** — re-extrai a página e re-analisa na hora.
+- **Badge de score** — mostra o score no ícone da extensão.
+- **Histórico local** — últimas análises salvas em `chrome.storage.local`
+  (seção colapsável com altura fixa).
+- **Cache por hash do conteúdo** — evita re-analisar a mesma vaga por 30
+  minutos (chave é o hash do texto extraído, não a URL — SPAs trocam a vaga
+  sem mudar o endereço).
+- **Copiar dicas** — exporta o resultado como texto formatado.
+- **Feedback de utilidade** — avaliação (sim/não) enviada ao backend.
+- **Extratores por site** — LinkedIn, Gupy, InHire e um extrator genérico.
+
+## Como funciona
+
+1. Clique no ícone da extensão → abre o **Side Panel**.
+2. O painel pede o texto da página ao content script (`GET_PAGE_TEXT`).
+3. Na primeira vez, conecta sua conta via `chrome.identity.launchWebAuthFlow`,
+   gerando um token de extensão no site.
+4. O backend analisa o texto e o painel mostra o resultado.
+
+O content script não renderiza UI: ele apenas extrai o texto da página e
+notifica o painel quando o conteúdo muda.
+
+## Desenvolvimento
+
+```bash
+npm install
+npm run dev        # build de desenvolvimento (carrega em chrome://extensions)
+npm run build      # build de produção em dist/
+npm test           # testes (API, extração, formatação)
+npm run icons      # regenera os ícones placeholder
+```
+
+### Carregar a extensão
+
+1. `npm run dev` (ou `npm run build`).
+2. Abra `chrome://extensions`, ative o "Modo do desenvolvedor".
+3. Clique em "Carregar sem compactação" e selecione a pasta `dist/`.
+4. Copie o **ID da extensão** (em `chrome://extensions`) e configure a variável
+   `EXTENSION_ORIGIN=chrome-extension://<id>` no `.env` do backend, depois
+   reinicie o backend.
+
+> Abas que já estavam abertas antes de recarregar a extensão são suportadas: o
+> background injeta o content script sob demanda via `chrome.scripting`.
+
+## Configuração
+
+A URL do site é lida de `VITE_SITE_URL` (padrão: `https://radar.unificando.com.br`,
+veja `.env.example`). Para desenvolvimento local, defina `VITE_SITE_URL` como
+`http://localhost:11010` no `.env`.
+
+> `http://localhost:11010/*` fica em `host_permissions` **apenas no modo dev**
+> (`npm run dev`). O build de produção (`npm run build` / `npm run zip`) gera o
+> manifesto **sem** localhost, com `minimum_chrome_version: "114"`.
+
+## Solução de problemas
+
+Erros comuns (análise 401/400/429, falha de conexão, alertas do console) e como
+resolver: veja [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md).
+
+## Estrutura
+
+```
+src/
+  background/        → Service worker: abre o side panel, roteia mensagens,
+                       chama a API e injeta o content script sob demanda.
+    index.ts         →   entry (roteador de mensagens).
+    api.ts           →   cliente HTTP do backend (analyze, feedback).
+    connect.ts       →   fluxo de conexão (launchWebAuthFlow + token).
+    badge.ts         →   badge de score no ícone.
+  content/           → Content script: extrai o texto da página e notifica
+                       mudanças (PAGE_CHANGED).
+    index.ts         →   entry (listeners + observer).
+    extract.ts       →   fachada de extração (escolhe o extrator pela URL).
+    extractors/      →   extratores por site (LinkedIn, Gupy, InHire, genérico).
+    spa.ts           →   detecção de mudança de URL em SPAs.
+  sidepanel/         → UI do Side Panel (análise, conexão, histórico).
+    index.tsx        →   entry React.
+    SidePanel.tsx    →   layout principal do painel.
+    useAnalysis.ts   →   hook de estado: análise, conexão e re-análise automática.
+    hooks/           →   hooks modulares: useConnection, useHistory, useJobAnalysis.
+    components/      →   ErrorView, ResultView, Section.
+    format.ts        →   formata o resultado para texto (copiar dicas).
+    clipboard.ts     →   helper de cópia com fallback.
+    utils.ts         →   helpers (truncar URL, mensagens de erro por código).
+    styles.css       →   estilos do painel.
+  shared/            → Compartilhado entre os contextos.
+    config.ts        →   URL do site e da API (via VITE_SITE_URL).
+    types/           →   tipos de domínio, mensagens e contrato da API.
+    storage/         →   persistência local (token, histórico, cache).
+```
+
+Veja [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) para o protocolo de
+mensagens e os fluxos em detalhe.

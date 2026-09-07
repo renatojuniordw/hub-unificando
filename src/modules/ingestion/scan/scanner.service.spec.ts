@@ -21,9 +21,11 @@ describe('ScannerService', () => {
     await mkdir(join(root, 'vendor', '.git'), { recursive: true });
     await writeFile(join(root, 'vendor', 'README.md'), 'ignored vendor');
     await writeFile(join(root, 'README.md'), '# readme');
+    await writeFile(join(root, 'notes.md'), 'ignored loose note');
     await writeFile(join(root, 'docs', 'architecture.md'), '# arch');
     await writeFile(join(root, 'docs', 'data.txt'), 'texto');
     await writeFile(join(root, 'docs', 'webp.bin'), 'ignored?');
+    await writeFile(join(root, 'docs', 'notes.md'), '# doc note');
     await writeFile(join(root, 'node_modules', 'some-pkg', 'deep.md'), 'ignored');
   });
 
@@ -31,10 +33,10 @@ describe('ScannerService', () => {
     await rm(root, { recursive: true, force: true });
   });
 
-  it('finds markdown/txt files and skips excluded dirs and other extensions', async () => {
+  it('finds curated knowledge files and skips excluded dirs, loose root notes and other extensions', async () => {
     const files = await service.scanFolder(root);
     const paths = files.map((file) => file.relativePath).sort();
-    expect(paths).toEqual(['README.md', 'docs/architecture.md', 'docs/data.txt']);
+    expect(paths).toEqual(['README.md', 'docs/architecture.md', 'docs/data.txt', 'docs/notes.md']);
   });
 
   it('still indexes a public folder that hosts docs', async () => {

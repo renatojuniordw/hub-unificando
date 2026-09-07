@@ -43,9 +43,5 @@ export const SCAN_EXCLUDED_DIRS = [
   '.cache',
 ];
 
-/** File names / extensions eligible for indexing in v1. */
-export const INDEXABLE_EXTENSIONS = new Set(['.md', '.mdx', '.txt']);
-export const INDEXABLE_NAMES = new Set(['CLAUDE.md', 'AGENTS.md', 'README.md']);
-
 /** Id of the default ingestion queue in BullMQ. */
 export const INGESTION_QUEUE = 'ingestion';

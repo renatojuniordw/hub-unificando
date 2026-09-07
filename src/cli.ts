@@ -14,7 +14,7 @@ import { SearchService } from './modules/search/search.service';
 import { ContextAssemblerService } from './modules/context/context-assembler.service';
 import { CompareService } from './modules/context/compare.service';
 import { SummaryService } from './modules/context/summary.service';
-import { KnowledgeBundleService } from './modules/ingestion/knowledge/knowledge-bundle.service';
+import { KnowledgeLibService } from './modules/ingestion/knowledge/knowledge-lib.service';
 
 async function createContext() {
   return NestFactory.createApplicationContext(AppModule, {
@@ -329,57 +329,20 @@ async function main(): Promise<void> {
     });
 
   program
-    .command('export-knowledge')
+    .command('sync-docs')
     .description(
-      'Gera o knowledge bundle (.tar.gz) com os arquivos indexáveis do ecossistema (rodar na máquina dev)',
+      'Dev: espelha os arquivos indexáveis dos projetos irmãos para a knowledge lib (knowledge/<slug>). Depois rode hub ingest e commite a lib.',
     )
-    .option(
-      '--out <path>',
-      'arquivo de saída (default ./knowledge-bundle.tar.gz)',
-      'knowledge-bundle.tar.gz',
-    )
-    .action(async (opts: { out: string }) => {
+    .option('--project <slug>', 'sincroniza apenas um projeto')
+    .option('--dry-run', 'apenas reporta o que seria copiado/removido, sem escrever')
+    .action(async (opts: { project?: string; dryRun?: boolean }) => {
       const app = await createContext();
       try {
-        const bundle = app.get(KnowledgeBundleService);
-        const result = await bundle.exportBundle(opts.out);
+        const lib = app.get(KnowledgeLibService);
+        const result = await lib.syncDocs(opts.project ? [opts.project] : undefined, {
+          dryRun: opts.dryRun ?? false,
+        });
         console.log(JSON.stringify(result, null, 2));
-      } finally {
-        await app.close();
-      }
-    });
-
-  program
-    .command('sync')
-    .description(
-      'VPS: extrai o knowledge bundle (se houver) e roda a ingestão incremental. Usado pelo entrypoint e pelo cron.',
-    )
-    .option(
-      '--bundle <path>',
-      'caminho do bundle (default: $KNOWLEDGE_BUNDLE_PATH)',
-      process.env.KNOWLEDGE_BUNDLE_PATH,
-    )
-    .option('--project <slug>', 'ingere apenas um projeto')
-    .action(async (opts: { bundle?: string; project?: string }) => {
-      const app = await createContext();
-      try {
-        const bundle = app.get(KnowledgeBundleService);
-        const orchestrator = app.get(IngestionOrchestrator);
-        let extracted = 0;
-        let bundlePath: string | null = null;
-        const candidate = opts.bundle ?? process.env.KNOWLEDGE_BUNDLE_PATH;
-        if (candidate) {
-          const { access } = await import('node:fs/promises');
-          try {
-            await access(candidate);
-            bundlePath = candidate;
-            extracted = await bundle.extractBundle(candidate);
-          } catch {
-            bundlePath = null; // bundle ausente -> apenas ingest do que existir
-          }
-        }
-        const ingest = await orchestrator.ingest({ projectSlug: opts.project }, {});
-        console.log(JSON.stringify({ bundle: bundlePath, extracted, ingest }, null, 2));
       } finally {
         await app.close();
       }

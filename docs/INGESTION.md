@@ -13,8 +13,8 @@ with its real file below).
 
 For each enabled project (or the requested `projectSlug`):
 
-1. **Resolve folder** — absolute `folderPath` values win; relative ones are
-   resolved against `HUB_SCAN_ROOT`.
+1. **Resolve folder** — three-layer source resolution (see "Source
+   resolution" below).
 2. **Scan** — collect indexable files under the project folder.
 3. **Parse** — split files into sections (heading-aware markdown, or a single
    plain-text section).
@@ -26,9 +26,44 @@ For each enabled project (or the requested `projectSlug`):
 8. **Persist** — delete + recreate document/chunks in a transaction, then
    write embeddings via raw SQL.
 
+## Source resolution
+
+`src/modules/ingestion/scan/project-source.ts`. `resolveProjectRoot` picks a
+project's content folder in this order:
+
+1. **Absolute `folderPath`** (test fixtures) always wins.
+2. **Knowledge lib** — `KNOWLEDGE_LIB_ROOT/<slug>` (default
+   `knowledge/<slug>` relative to the repo root) when the folder exists. The
+   lib is the committed documentation mirror and the source of truth on the
+   VPS, making the Hub independent of the sibling repositories.
+3. **Scan root fallback** — `HUB_SCAN_ROOT/<folderPath>` (dev, before a
+   project has been mirrored).
+
+`resolveKnowledgeLibRoot` turns a relative `KNOWLEDGE_LIB_ROOT` into an
+absolute path against the working directory. `hub scan` still reads the real
+siblings under `HUB_SCAN_ROOT` for registry metadata only.
+
+## Knowledge lib
+
+`src/modules/ingestion/knowledge/knowledge-lib.service.ts`. The committed
+`knowledge/<slug>/` mirror (one folder per project slug — the repository
+name, not the local folder) holds every indexable file of the ecosystem, so
+`hub ingest` never needs the sibling repositories at runtime.
+
+- **`hub sync-docs`** (dev) re-mirrors the lib from the live siblings under
+  `HUB_SCAN_ROOT`: it scans each project (curated scope only), copies the
+  files into `knowledge/<slug>/` and **prunes** lib files that left the scope
+  (a missing source folder skips the project with a warning — it never
+  prunes). `--dry-run` only reports. After a sync, commit `knowledge/`; the
+  diff is the documentation delta.
+- **Production** ships the lib inside the Docker image
+  (`KNOWLEDGE_LIB_ROOT=/app/knowledge`); the entrypoint runs `hub ingest`
+  against it on first boot (see `docs/DEPLOYMENT.md`).
+
 ## Scanner rules
 
-`src/modules/ingestion/scan/scanner.service.ts`; constants in
+`src/modules/ingestion/scan/scanner.service.ts`; curated-scope rule in
+`src/modules/ingestion/scan/knowledge-path.ts`; exclusions in
 `src/shared/constants.ts`.
 
 - **Excluded dirs** — `SCAN_EXCLUDED_DIRS` is checked on **every path
@@ -41,9 +76,13 @@ For each enabled project (or the requested `projectSlug`):
   `docs`/`documentation` subfolder); static asset dirs are skipped.
 - **Nested git checkouts** (a subfolder with its own `.git`, e.g. a cloned
   vendor repo inside a project) are skipped — they are separate codebases.
-- **Indexable** — extension in `INDEXABLE_EXTENSIONS` = `.md`, `.mdx`, `.txt`,
-  or name in `INDEXABLE_NAMES` = `CLAUDE.md`, `AGENTS.md`, `README.md`
-  (`isIndexable`).
+- **Curated scope** (`isKnowledgePath` in `knowledge-path.ts`) — a file is
+  indexed only when it is real documentation: `README.md`/`CLAUDE.md`/
+  `AGENTS.md` at the project root, any file under a `docs`/`documentation`
+  folder at any depth, or `prompts/` at the root — always with a
+  `.md`/`.mdx`/`.txt` extension. Loose `.md` files elsewhere (`notes.md`,
+  `public/llms.txt`, `src/docs.ts`, …) are skipped. A re-run converges the
+  index: `pruneStaleDocuments` deletes documents whose files left the scope.
 - Unreadable dirs/files are logged and skipped; relative paths are normalized
   to POSIX separators.
 
@@ -163,6 +202,9 @@ write throttle 30/min):
 Built on a Nest application context (`src/cli.ts`):
 
 ```bash
+npm run hub -- sync-docs                   # dev: mirror siblings into knowledge/<slug> (commit after)
+npm run hub -- sync-docs --dry-run         # report-only mirror diff
+npm run hub -- sync-docs --project med-unificando   # mirror a single project
 npm run hub -- ingest                      # all enabled projects (foreground)
 npm run hub -- ingest med-unificando       # one project
 npm run hub -- ingest radar-unificando --force     # ignore sha256 dedupe
@@ -174,6 +216,11 @@ npm run hub -- classify --project radar-unificando   # reclassify docs, no re-em
 npm run hub -- reindex-embeddings --project med-unificando  # recompute chunk vectors
 npm run hub -- health                      # db/redis readiness
 ```
+
+The Hub is autonomous: `ingest` reads from the committed knowledge lib
+(`knowledge/<slug>`), so a fresh clone + `hub ingest` is enough to rebuild the
+index anywhere — no sibling repositories required. In dev, keep the lib fresh
+with `hub sync-docs` before ingesting.
 
 `scripts/smoke-ingest.ts` ingests a project and exits non-zero when any file
 errors — used as a CI/local smoke check (`.github/workflows/ci.yml`
