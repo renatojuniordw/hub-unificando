@@ -152,4 +152,31 @@ describe('PromptExtractorService.extractPrompts', () => {
 
     await expect(service.extractPrompts('radar-unificando', root)).rejects.toThrow(/BROKEN_PROMPT/);
   });
+
+  it('throws ExtractPromptError for nested template interpolations', async () => {
+    const dir = promptsDir(root);
+    await mkdir(dir, { recursive: true });
+    await writeFile(
+      join(dir, 'nested.ts'),
+      ['export const NESTED_PROMPT = `prefixo ${`sub`} fim`;', ''].join('\n'),
+      'utf8',
+    );
+
+    await expect(service.extractPrompts('radar-unificando', root)).rejects.toThrow(/NESTED_PROMPT/);
+  });
+
+  it('throws ExtractPromptError for spread properties in securityRules options', async () => {
+    const dir = promptsDir(root);
+    await mkdir(dir, { recursive: true });
+    await writeFile(
+      join(dir, 'spread.ts'),
+      [
+        'export const SPREAD_PROMPT = `x ${securityRules({ ...opts, tags: "<t>", treatAs: "dado" })} y`;',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+
+    await expect(service.extractPrompts('radar-unificando', root)).rejects.toThrow(/SPREAD_PROMPT/);
+  });
 });

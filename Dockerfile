@@ -32,11 +32,19 @@ WORKDIR /app
 
 # Run as non-root user
 RUN useradd --create-home --uid 1001 hubuser
+# Model cache dir (mounted as a named volume): pre-create it owned by hubuser
+# so a fresh volume inherits the right ownership — otherwise the root-owned
+# mountpoint blocks the on-device model download (EACCES).
+RUN mkdir -p /data/.transformers-cache && chown -R hubuser:hubuser /data
 
 # node_modules completo: o entrypoint usa prisma CLI + tsx (migrate/seed).
 COPY --from=build --chown=hubuser:hubuser /app/node_modules ./node_modules
 COPY --from=build --chown=hubuser:hubuser /app/dist ./dist
 COPY --from=build --chown=hubuser:hubuser /app/prisma ./prisma
+# Cliente Prisma gerado (src/generated, saída do `prisma generate`): o seed
+# roda via tsx a partir de prisma/seed.ts, que importa ../src/generated/... —
+# o dist não resolve esse caminho (Prisma 7 emite .ts no output declarado).
+COPY --from=build --chown=hubuser:hubuser /app/src/generated ./src/generated
 # Knowledge lib commitada — fonte da ingestão (KNOWLEDGE_LIB_ROOT=/app/knowledge).
 COPY --from=build --chown=hubuser:hubuser /app/knowledge ./knowledge
 COPY --chown=hubuser:hubuser package.json prisma.config.ts ./
