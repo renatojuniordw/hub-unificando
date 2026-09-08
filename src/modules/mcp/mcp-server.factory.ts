@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { ENV, type Env } from '../../shared/config/env';
 import { PrismaService } from '../../infra/prisma/prisma.service';
@@ -24,6 +24,8 @@ import type { McpDeps } from './tools/mcp.deps';
  */
 @Injectable()
 export class McpServerFactory {
+  private readonly logger = new Logger(McpServerFactory.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly projects: ProjectsService,
@@ -40,7 +42,24 @@ export class McpServerFactory {
   ) {}
 
   create(): McpServer {
-    const deps: McpDeps = {
+    const server = new McpServer({
+      name: MCP_SERVER_NAME,
+      version: MCP_SERVER_VERSION,
+    });
+    registerTools(server, createToolDefinitions(this.buildDeps()), this.logger);
+    return server;
+  }
+
+  /** Nomes das tools registradas (para o health endpoint). */
+  toolNames(): string[] {
+    // Criar as definições é barato (nenhum handler roda na construção — só
+    // montam objeto e capturam deps no closure); lemos apenas `.name`.
+    return createToolDefinitions(this.buildDeps()).map((tool) => tool.name);
+  }
+
+  /** Deps do domínio compartilhadas por toda sessão (mesma instância DI). */
+  private buildDeps(): McpDeps {
+    return {
       prisma: this.prisma,
       projects: this.projects,
       documents: this.documents,
@@ -54,11 +73,5 @@ export class McpServerFactory {
       writeRepo: this.writeRepo,
       env: this.env,
     };
-    const server = new McpServer({
-      name: MCP_SERVER_NAME,
-      version: MCP_SERVER_VERSION,
-    });
-    registerTools(server, createToolDefinitions(deps));
-    return server;
   }
 }

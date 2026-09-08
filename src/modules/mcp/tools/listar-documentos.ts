@@ -27,7 +27,10 @@ export function listarDocumentos(deps: McpDeps): McpToolDefinition<typeof schema
         page: page ?? 1,
         pageSize: pageSize ?? 20,
       });
-      return result;
+      return {
+        ...result,
+        nextPage: result.meta.hasNext,
+      };
     },
   };
 }

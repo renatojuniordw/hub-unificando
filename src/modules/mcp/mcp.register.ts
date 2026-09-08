@@ -3,6 +3,11 @@ import type { z } from 'zod';
 import type { McpToolDefinition } from './mcp.types';
 import { jsonResult, toolError } from './result.utils';
 
+/** Interface mínima de logger exigida pelo composition root (DIP). */
+export interface McpToolLogger {
+  error(message: string, stack?: string): void;
+}
+
 /** Visão tipada da tool usada dentro do registro (o any fica na fronteira). */
 interface BoundedTool {
   name: string;
@@ -14,10 +19,16 @@ interface BoundedTool {
 /**
  * Registra tools declarativas no servidor MCP (composition root).
  * Nova tool = arquivo novo + entrada no array; o núcleo não muda (OCP).
- * Wrapping de serialização/erro centralizado (DRY).
+ * Wrapping de serialização/erro centralizado (DRY). O logger é obrigatório
+ * para que o erro real de uma tool sempre chegue ao log (nunca é devolvido
+ * ao cliente — apenas a mensagem genérica).
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- fronteira de protocolo (array heterogêneo)
-export function registerTools(server: McpServer, defs: readonly McpToolDefinition<any>[]): void {
+export function registerTools(
+  server: McpServer,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- fronteira de protocolo (array heterogêneo)
+  defs: readonly McpToolDefinition<any>[],
+  logger: McpToolLogger,
+): void {
   for (const raw of defs) {
     const tool = raw as BoundedTool;
     server.registerTool(
@@ -30,7 +41,7 @@ export function registerTools(server: McpServer, defs: readonly McpToolDefinitio
         try {
           return jsonResult(await tool.handler(args));
         } catch (error) {
-          return toolError(error);
+          return toolError(error, logger, tool.name);
         }
       },
     );

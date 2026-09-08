@@ -21,6 +21,7 @@ export function consultarDecisao(deps: McpDeps): McpToolDefinition<typeof schema
       const result = await deps.decisions.list(project, status, q, page ?? 1, pageSize ?? 10);
       return {
         total: result.meta.total,
+        nextPage: result.meta.hasNext,
         decisions: result.data.map((decision) => ({
           id: decision.id,
           projectSlug: decision.projectSlug,

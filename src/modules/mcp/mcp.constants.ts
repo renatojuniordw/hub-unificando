@@ -5,6 +5,9 @@ export const MCP_SERVER_VERSION = packageJson.version;
 
 export const MCP_PATH = '/mcp';
 
+/** Versão da spec MCP anunciada (Streamable HTTP 2025-06-18). */
+export { MCP_PROTOCOL_VERSION } from '../../shared/constants';
+
 export const MCP_ALLOWED_METHODS = 'GET, POST, DELETE, OPTIONS';
 export const MCP_ALLOWED_HEADERS =
   'content-type, authorization, accept, mcp-session-id, mcp-protocol-version';

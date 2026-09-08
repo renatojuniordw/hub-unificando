@@ -19,11 +19,12 @@ export function jsonResult(data: unknown): McpToolResult {
 export function toolError(
   error: unknown,
   logger?: { error: (message: string, stack?: string) => void },
+  toolName?: string,
 ): McpToolResult {
   const message = error instanceof Error ? error.message : 'unknown';
   if (logger) {
     logger.error(
-      `[mcp] error on tool: ${message}`,
+      `[mcp] error on tool${toolName ? ` "${toolName}"` : ''}: ${message}`,
       error instanceof Error ? error.stack : undefined,
     );
   }

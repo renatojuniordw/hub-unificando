@@ -15,11 +15,15 @@ pipes/filtros do Nest). Cada sessão HTTP ganha um `McpServer` próprio (1
 transport por sessão); sessões têm TTL `MCP_SESSION_TTL_MIN` (60 min, sliding)
 com sweep.
 
+Toda resposta HTTP do `/mcp` leva o header `mcp-protocol-version: 2025-06-18`
+(anunciado pelo próprio servidor; também exposto ao browser via
+`Access-Control-Expose-Headers`).
+
 ## As 12 tools
 
 | Tool (R/W) | Entrada | Saída |
 |---|---|---|
-| `listar_projetos` (R) | — | registry com counts |
+| `listar_projetos` (R) | `page? pageSize?` | registry com counts + `total`/`nextPage` |
 | `detalhe_projeto` (R) | `project` | projeto + documentos + counts |
 | `listar_documentos` (R) | `project? category? docType? q? page? pageSize?` | lista paginada |
 | `obter_documento` (R) | `path` ou `id` (+`project?`) | conteúdo integral + chunks |
@@ -34,7 +38,15 @@ com sweep.
 
 Formato de resposta de toda tool: content block de texto com JSON
 `{ "ok": true, "data": ... }` ou `{ "ok": false, "error": { "code", "message" } }`
-(erros de execução são genéricos; detalhes vão ao log).
+(erros de execução são genéricos; detalhes vão ao log — com o nome da tool e
+o stack, para diagnóstico).
+
+Tools que listam coleções (`listar_projetos`, `listar_documentos`,
+`consultar_decisao`) devolvem paginação no `data`:
+`total` (quantos há no total), `nextPage` (bool — `true` se existem mais
+registros além da página atual) e os itens na chave de cada coleção
+(`projects`/`documents`/`decisions`). `listar_projetos` aceita `page` (1+) e
+`pageSize` (1–100) para navegar.
 
 ## Segurança (`MCP_API_KEY`, origins, rate limit)
 
@@ -75,6 +87,34 @@ Authorization: Bearer <MCP_API_KEY>   (se configurada)
 ```
 
 **opencode** (config de agentes) pode usar o mesmo stdio command.
+
+## Health (GET /mcp sem sessão)
+
+Um `GET /mcp` **sem** `Mcp-Session-Id` responde `200` com visão do servidor
+(sem criar sessão nem inicializar transporte):
+
+```json
+{
+  "ok": true,
+  "data": {
+    "name": "hub-unificando",
+    "version": "0.1.0",
+    "protocolVersion": "2025-06-18",
+    "tools": ["listar_projetos", "..."],
+    "sessions": { "sessions": 0, "maxSessions": 16 }
+  }
+}
+```
+
+Útil para healthcheck e para clientes descobrirem as tools disponíveis sem
+handshake. `GET` **com** sessão mantém o SSE da sessão; sessão inválida → 404.
+
+## Erros de protocolo
+
+JSON-RPC inválido (JSON malformado, `jsonrpc` ausente, método desconhecido,
+parâmetros fora do schema) responde com o erro estruturado do protocolo MCP
+(ex.: `-32700 Parse error` para JSON malformado, `400`), sem derrubar a
+sessão — o detalhe não vira `500` nem log de erro interno.
 
 ## Handshake (curl)
 

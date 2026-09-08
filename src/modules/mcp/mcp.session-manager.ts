@@ -73,6 +73,11 @@ export class McpSessionManager {
     return this.sessions.size;
   }
 
+  /** Visão agregada para o health endpoint (sem detalhes de sessão). */
+  status(): { sessions: number; maxSessions: number } {
+    return { sessions: this.sessions.size, maxSessions: MAX_SESSIONS };
+  }
+
   private remove(sessionId: string): void {
     const session = this.sessions.get(sessionId);
     if (!session) return;

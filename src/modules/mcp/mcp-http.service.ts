@@ -1,7 +1,14 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { ENV, type Env } from '../../shared/config/env';
-import { MCP_ALLOWED_HEADERS, MCP_ALLOWED_METHODS } from './mcp.constants';
+import {
+  MCP_ALLOWED_HEADERS,
+  MCP_ALLOWED_METHODS,
+  MCP_PROTOCOL_VERSION,
+  MCP_SERVER_NAME,
+  MCP_SERVER_VERSION,
+} from './mcp.constants';
+import { McpServerFactory } from './mcp-server.factory';
 import { McpSessionManager } from './mcp.session-manager';
 import { applyCors, checkMcpSecurity } from './mcp.security';
 
@@ -17,6 +24,7 @@ export class McpHttpService {
   private readonly buckets = new Map<string, { count: number; resetAt: number }>();
 
   constructor(
+    private readonly serverFactory: McpServerFactory,
     private readonly sessions: McpSessionManager,
     @Inject(ENV) private readonly env: Env,
   ) {}
@@ -24,6 +32,8 @@ export class McpHttpService {
   async handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const origin = req.headers.origin ?? null;
     applyCors(res, origin, this.env);
+    // Anuncia a versão da spec em toda resposta (o SDK não emite o header).
+    this.announceProtocolVersion(res);
 
     if (req.method === 'OPTIONS') {
       res.writeHead(204, {
@@ -61,7 +71,17 @@ export class McpHttpService {
           return;
         }
       } else if (req.method === 'GET') {
-        this.sendJson(res, 404, { error: 'Sessão não encontrada. Inicialize uma nova sessão.' });
+        // Health/visão do servidor sem sessão: metadados + estado agregado.
+        this.sendJson(res, 200, {
+          ok: true,
+          data: {
+            name: MCP_SERVER_NAME,
+            version: MCP_SERVER_VERSION,
+            protocolVersion: MCP_PROTOCOL_VERSION,
+            tools: this.serverFactory.toolNames(),
+            sessions: this.sessions.status(),
+          },
+        });
         return;
       } else {
         transport = await this.sessions.create();
@@ -71,10 +91,13 @@ export class McpHttpService {
       // sessão iniciada por POST (mesmo fluxo do med).
       await transport.handleRequest(req, res, (req as { body?: unknown }).body);
     } catch (error) {
-      this.logger.error(
-        `[mcp] erro no transporte: ${error instanceof Error ? error.message : 'error'}`,
-      );
+      // O SDK responde por conta própria erros de protocolo (ex.: JSON
+      // malformado → 400 -32700). Quando `writableEnded` já é true, a resposta
+      // foi enviada — não sobrescrever nem logar como falha interna.
       if (!res.writableEnded) {
+        this.logger.error(
+          `[mcp] erro no transporte: ${error instanceof Error ? error.message : 'error'}`,
+        );
         this.sendJson(res, 500, { error: 'Erro interno do servidor MCP' });
       }
     }
@@ -88,5 +111,20 @@ export class McpHttpService {
       'Content-Length': Buffer.byteLength(payload),
     });
     res.end(payload);
+  }
+
+  /**
+   * Garante o header `mcp-protocol-version` em toda resposta do /mcp (o SDK
+   * não emite). `mcp-session-id` já é exposto pelo CORS; aqui apenas somamos
+   * o protocolo ao Expose-Headers sem apagar o valor que o applyCors definiu.
+   */
+  private announceProtocolVersion(res: ServerResponse): void {
+    res.setHeader('mcp-protocol-version', MCP_PROTOCOL_VERSION);
+    const exposed = res.getHeader('Access-Control-Expose-Headers');
+    if (typeof exposed === 'string' && !exposed.includes('mcp-protocol-version')) {
+      res.setHeader('Access-Control-Expose-Headers', `${exposed}, mcp-protocol-version`);
+    } else if (exposed === undefined) {
+      res.setHeader('Access-Control-Expose-Headers', 'mcp-session-id, mcp-protocol-version');
+    }
   }
 }
