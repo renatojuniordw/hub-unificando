@@ -22,12 +22,20 @@ describe('resolveProjectRoot', () => {
     await rm(scanRoot, { recursive: true, force: true });
   });
 
-  it('keeps absolute folderPaths as the source', async () => {
+  it('keeps existing absolute folderPaths as the source', async () => {
     const resolved = await resolveProjectRoot(
-      { slug: 'fixture', folderPath: '/tmp/whatever/fixture' },
+      { slug: 'fixture', folderPath: scanRoot },
       { knowledgeLibRoot, scanRoot },
     );
-    expect(resolved).toEqual({ kind: 'absolute', path: '/tmp/whatever/fixture' });
+    expect(resolved).toEqual({ kind: 'absolute', path: scanRoot });
+  });
+
+  it('falls back to the lib when an absolute folderPath does not exist (VPS)', async () => {
+    const resolved = await resolveProjectRoot(
+      { slug: 'med-unificando', folderPath: '/tmp/does-not-exist-anywhere' },
+      { knowledgeLibRoot, scanRoot },
+    );
+    expect(resolved.kind).toBe('knowledge-lib');
   });
 
   it('prefers the knowledge lib when the slug folder exists', async () => {

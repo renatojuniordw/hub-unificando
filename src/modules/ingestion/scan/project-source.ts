@@ -25,7 +25,10 @@ export function resolveKnowledgeLibRoot(value: string): string {
 
 /**
  * Three-layer source resolution for a project's files:
- * 1. An absolute `folderPath` (test fixtures) always wins.
+ * 1. An absolute `folderPath` (test fixtures, out-of-tree projects like
+ *    portfolio-ui) wins **when the folder exists** — on a VPS without the
+ *    sibling checkout it would otherwise scan an empty tree and prune the
+ *    lib-ingested documents.
  * 2. The committed knowledge lib folder `knowledgeLibRoot/<slug>` when it
  *    exists (preferred source — the Hub is autonomous on the VPS).
  * 3. Fallback to the sibling project folder `scanRoot/<folderPath>` (dev,
@@ -35,10 +38,18 @@ export async function resolveProjectRoot(
   project: Pick<{ folderPath: string; slug: string }, 'folderPath' | 'slug'>,
   options: ResolveProjectRootOptions,
 ): Promise<ResolvedProjectRoot> {
-  if (project.folderPath.startsWith('/')) {
-    return { kind: 'absolute', path: project.folderPath };
-  }
   const preferKnowledgeLib = options.preferKnowledgeLib !== false;
+  if (project.folderPath.startsWith('/')) {
+    try {
+      const info = await stat(project.folderPath);
+      if (info.isDirectory()) {
+        return { kind: 'absolute', path: project.folderPath };
+      }
+    } catch {
+      // absolute folderPath not present (e.g. VPS without the checkout) —
+      // fall through to the knowledge lib below
+    }
+  }
   if (preferKnowledgeLib) {
     const libPath = join(options.knowledgeLibRoot, project.slug);
     try {
