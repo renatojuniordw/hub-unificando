@@ -78,7 +78,10 @@ Particularidades que quebram com frequência:
    que as cubram (reconciliação do prompt `testes`). A atualização é sempre
    dirigida pela spec/regra intencional — nunca um ajuste cego de asserção
    para ficar verde; se o teste quebrou sem o contrato ter mudado, continua
-   valendo o revert/report.
+   valendo o revert/report. Quando a mudança de lógica não tem teste cobrindo
+   o caminho alterado, a mudança inclui criar o teste que documenta o
+   comportamento (novo ou preservado) — sem ele, a regra 8 não tem como
+   verificar o caminho.
 
 4. **Teste real, não métrica.** Proibido criar teste artificial só para subir
    cobertura — % de linha é referência, não meta. Testes seguem F.I.R.S.T.
@@ -113,6 +116,11 @@ Particularidades que quebram com frequência:
    provisionado — levante o ambiente ou registre o gate como não executado.
    `test:e2e` não roda em CI (precisa DB seedado e sobrepõe o integration):
    rode-o localmente sempre que a mudança tocar controller/rota/fluxo REST.
+
+   **Teste do caminho alterado:** o gate exige um teste que exercite o
+   caminho que você mudou — suíte verde que não toca no caminho não valida
+   a mudança. Caminho alterado sem teste existente → criar o teste (regra
+   3); impossível cobrir (UI, integração sem ambiente), registrar por quê.
 
 9. **Não assumir em silêncio.** Ambiguidade real → registre a suposição
    (motivo incluído) e siga; bloqueio objetivo que nenhuma suposição razoável
@@ -205,5 +213,5 @@ npx prompts-unificando list
 npx prompts-unificando get <id>       # ex.: refatoracao-faseada, testes
 ```
 
-Este arquivo não duplica o conteúdo episódico — guarda apenas as regras
-permanentes que valem para todo o desenvolvimento diário.
+As regras acima são o que vale para todo o desenvolvimento diário; o
+conteúdo episódico fica na biblioteca, versionada e buscável sob demanda.
