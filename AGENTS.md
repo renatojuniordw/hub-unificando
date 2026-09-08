@@ -106,6 +106,14 @@ Particularidades que quebram com frequência:
    existente no baseline é registrada como pré-existente, não responsabilidade
    da mudança atual.
 
+   **Ambiente dos gates:** unit roda sem infra (`npm run test`). E2E REST
+   (`npm run test:e2e`) e integration (`npm run test:integration`) dependem de
+   ambiente — respectivamente Postgres local migrado/seedado (`docker compose up -d db` + `npm run prisma:migrate` + `npm run prisma:seed`) e container
+   Testcontainers. Não declare uma suite quebrada se o ambiente dela não foi
+   provisionado — levante o ambiente ou registre o gate como não executado.
+   `test:e2e` não roda em CI (precisa DB seedado e sobrepõe o integration):
+   rode-o localmente sempre que a mudança tocar controller/rota/fluxo REST.
+
 9. **Não assumir em silêncio.** Ambiguidade real → registre a suposição
    (motivo incluído) e siga; bloqueio objetivo que nenhuma suposição razoável
    resolve → pergunte. Nunca invente.
@@ -120,16 +128,16 @@ Particularidades que quebram com frequência:
     com a doc correspondente atualizada — a documentação da própria mudança
     faz parte da entrega, não é escopo extra. Guia:
 
-    | Mudança                                        | Doc                                         |
-    | ---------------------------------------------- | ------------------------------------------- |
-    | Endpoint/rota, DTO, envelope ou fluxo REST     | `docs/API.md`                               |
-    | Tool MCP, transporte, segurança do MCP         | `docs/MCP.md`                               |
-    | Módulo, camada, fluxo interno relevante        | `docs/ARCHITECTURE.md`                      |
-    | Schema, campo, índice ou modelo de dados       | `docs/DATA-MODEL.md`                        |
-    | Scanner, chunker, classificação, `knowledge/`  | `docs/INGESTION.md`                         |
-    | Busca (RRF, índice, query)                     | `docs/SEARCH.md`                            |
-    | Suíte/comando de teste                         | `docs/TESTING.md`                           |
-    | Decisão estrutural com alternativa considerada | ADR novo em `docs/decisions/NNNN-titulo.md` |
+    | Mudança                                        | Doc                                              |
+    | ---------------------------------------------- | ------------------------------------------------ |
+    | Endpoint/rota, DTO, envelope ou fluxo REST     | `docs/API.md`                                    |
+    | Tool MCP, transporte, segurança do MCP         | `docs/MCP.md`                                    |
+    | Módulo, camada, fluxo interno relevante        | `docs/ARCHITECTURE.md`                           |
+    | Schema, campo, índice ou modelo de dados       | `docs/DATA-MODEL.md` + migration/seed (regra 12) |
+    | Scanner, chunker, classificação, `knowledge/`  | `docs/INGESTION.md`                              |
+    | Busca (RRF, índice, query)                     | `docs/SEARCH.md`                                 |
+    | Suíte/comando de teste                         | `docs/TESTING.md`                                |
+    | Decisão estrutural com alternativa considerada | ADR novo em `docs/decisions/NNNN-titulo.md`      |
 
     Se a mudança é apenas interna (sem efeito em contrato/uso visível), doc
     não é obrigatória — mas o ADR/`ARCHITECTURE.md` pode registrar quando a
@@ -137,15 +145,40 @@ Particularidades que quebram com frequência:
     descreve o comportamento antigo; se descreve, ela precisa sair da tarefa
     atualizada.
 
-12. **Diagnóstico antes de refatoração grande.** Para refatorar em escopo
+12. **Mudança de schema anda com migration + seed.** Alterou modelo, campo
+    ou índice no Prisma → gere a migration no mesmo trabalho
+    (`npm run prisma:migrate`), respeite a convenção de nomes `idx_`
+    declarados no schema e, se o seed alimenta o que mudou (categorias,
+    taxonomia, registros), atualize `prisma/seed.ts` junto. Código novo
+    apontando para schema que não existe no banco é quebra de deploy —
+    a migration é parte da entrega, não passo posterior.
+
+13. **Data/índice ingerido que muda exige reingestão.** O hub indexa
+    `knowledge/` com idempotência por `sourceSha` (ADR 0009). Se a mudança
+    afeta conteúdo já ingerido (chunker, extração de prompt, classificação,
+    escopo da knowledge lib, seed), o índice fica servindo dados velhos até
+    a reingestão. Nesses casos, rode o caminho afetado localmente ou valide
+    com `hub ingest --force` — e registre a necessidade de reingestão no
+    deploy, em vez de deixar silencioso.
+
+14. **Superfície MCP/CLI/escrita é contrato do ecossistema.** O hub é o
+    provedor MCP dos demais agentes (desktop/Cursor/opencode apontam para o
+    stdio/HTTP deste repo); tools MCP e comandos do CLI não são detalhe
+    interno. Mudança que altera nome, schema de input/output ou semântica de
+    uma tool MCP ou comando CLI exige: doc correspondente atualizada (regra 11) e verificação explícita de que a mudança não quebra os consumidores
+    existentes do stdio/HTTP — sinalize impacto e sugira o teste/verificação,
+    em vez de aplicar silenciosamente.
+
+15. **Diagnóstico antes de refatoração grande.** Para refatorar em escopo
     amplo, faça a varredura/mapeamento completo read-only primeiro (plano
     mestre com achados e arquivos afetados) e só então edite — evita que uma
     fase refatore o que outra deletaria.
 
-13. **Escopo disciplinado.** Não crie instruções, fases, features ou
+16. **Escopo disciplinado.** Não crie instruções, fases, features ou
     entregáveis não solicitados na tarefa. Nenhuma iniciativa proativa fora
-    do contrato da conversa. A atualização de documentação da regra 11 é
-    exceção explícita — é parte do contrato, não escopo extra. (Origem: R9
+    do contrato da conversa. A atualização de documentação da regra 11 e os
+    passos de migration/reingestão das regras 12–13 são exceções explícitas —
+    fazem parte do contrato, não escopo extra. (Origem: R9
     `refatoracao-faseada`.)
 
 ## Segurança
