@@ -22,7 +22,8 @@ async function bootstrap(): Promise<void> {
   app.setGlobalPrefix(API_PREFIX, { exclude: ['health', MCP_PATH] });
 
   app.enableCors({
-    origin: env.CORS_ORIGINS.split(',')
+    origin: (env.HUB_PUBLIC_CORS_ORIGINS || env.CORS_ORIGINS)
+      .split(',')
       .map((o) => o.trim())
       .filter(Boolean),
     credentials: true,

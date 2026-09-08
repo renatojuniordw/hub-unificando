@@ -48,6 +48,9 @@ export interface SearchHit {
   tokenCount: number;
   categories: string[];
   docType: string;
+  contentKind: string | null;
+  tags: string[];
+  publishedAt: Date | null;
   score: number;
   vectorScore: number | null;
   keywordScore: number | null;
@@ -171,6 +174,9 @@ export class SearchService {
       tokenCount: hit.tokenCount,
       categories: hit.categories,
       docType: hit.docType,
+      contentKind: hit.contentKind,
+      tags: hit.tags,
+      publishedAt: hit.publishedAt,
       score: entry.rrf,
       vectorScore: entry.vectorScore,
       keywordScore: entry.keywordScore,

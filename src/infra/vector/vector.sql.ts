@@ -34,6 +34,9 @@ export interface ChunkHitRow {
   tokenCount: number;
   categories: string[];
   docType: string;
+  contentKind: string | null;
+  tags: string[];
+  publishedAt: Date | null;
   score: number;
 }
 
@@ -48,7 +51,10 @@ const CHUNK_SELECT = `
   c.content,
   c."tokenCount",
   d.categories,
-  d."docType"
+  d."docType",
+  d."contentKind",
+  d.tags,
+  d."publishedAt"
 `;
 
 interface FilterSql {

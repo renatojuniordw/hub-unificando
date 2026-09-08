@@ -14,6 +14,7 @@ import { ClassificationModule } from './modules/classification/classification.mo
 import { IngestionModule } from './modules/ingestion/ingestion.module';
 import { SearchModule } from './modules/search/search.module';
 import { ContextModule } from './modules/context/context.module';
+import { PostsModule } from './modules/posts/posts.module';
 import { McpModule } from './modules/mcp/mcp.module';
 import { EnvModule } from './shared/config/env.module';
 import { ENV, type Env } from './shared/config/env';
@@ -48,6 +49,7 @@ import { ENV, type Env } from './shared/config/env';
     IngestionModule,
     SearchModule,
     ContextModule,
+    PostsModule,
     McpModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

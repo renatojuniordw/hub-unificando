@@ -38,6 +38,10 @@ const EnvSchema = z.object({
   THROTTLE_READ: intFromEnv(120),
   THROTTLE_WRITE: intFromEnv(30),
   CORS_ORIGINS: z.string().default('http://localhost:11020'),
+  // Public CORS allow-list for browser consumers (portfolio/landing fetch the
+  // API server-side, so this is only needed for direct browser access). When
+  // empty, falls back to CORS_ORIGINS.
+  HUB_PUBLIC_CORS_ORIGINS: z.string().default(''),
   SEARCH_CACHE_TTL_SECONDS: intFromEnv(60),
 });
 
