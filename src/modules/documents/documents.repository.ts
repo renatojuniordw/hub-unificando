@@ -82,12 +82,4 @@ export class DocumentsRepository {
     ]);
     return { items, total };
   }
-
-  async shaByPath(projectSlug: string): Promise<Map<string, string>> {
-    const rows = await this.prisma.document.findMany({
-      where: { projectSlug },
-      select: { path: true, sourceSha: true },
-    });
-    return new Map(rows.map((r) => [r.path, r.sourceSha]));
-  }
 }

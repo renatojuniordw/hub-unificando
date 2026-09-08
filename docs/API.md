@@ -22,8 +22,13 @@ Códigos de erro estáveis: `VALIDATION_ERROR`, `NOT_FOUND`, `CONFLICT`,
 ## Rate limits (por IP, janela de 60s)
 
 - Leitura: `THROTTLE_READ` (default 120/min).
-- Escrita (`POST /ingest/jobs`): `THROTTLE_WRITE` (default 30/min).
+- Escrita (`POST /ingest/jobs`): `THROTTLE_WRITE` (default 30/min) — aplicado via
+  `@Throttle` no controller.
 - MCP: `MCP_RATE_LIMIT` (default 120/min) — scope próprio.
+
+> O IP usado nos rate limits é o socket (`req.ip`). Apenas com `TRUST_PROXY=true`
+> (atrás de proxy reverso) o `x-forwarded-for` é considerado — usando a última
+> entrada, adicionada pelo proxy confiável (ver SECURITY.md).
 
 ## Endpoints
 
@@ -34,6 +39,10 @@ Códigos de erro estáveis: `VALIDATION_ERROR`, `NOT_FOUND`, `CONFLICT`,
 ```json
 { "success": true, "data": { "status": "ok", "service": "hub-unificando", "version": "0.1.0", "checks": { "db": true, "redis": true }, "data": { "embeddedChunks": 2133 }, "timestamp": "..." } }
 ```
+
+`status` é `ok` quando `db` e `redis` respondem e a contagem de embeddings pôde
+ser lida; qualquer falha (inclusive na contagem) degrada para `degraded` com
+`embeddedChunks: null` — o probe nunca devolve 500.
 
 ### Registry
 
@@ -111,12 +120,14 @@ curl "http://localhost:11020/api/v1/search?q=busca%20hibrida%20pgvector&project=
 ```
 
 Parâmetros: `strategy` = `balanced` | `recall` | `precision`; paginação
-`page`/`pageSize` (`pageSize` ≤ 100); filtros `project`/`category`/`docType`.
+`page`/`pageSize` (`pageSize` ≤ 100); filtros `project`/`category`/`docType`;
+`minScore` (float) corta resultados por score de fusão (RRF) **antes** da
+paginação — `total` reflete o pool qualificado, não a página retornada.
 Detalhes da fusão em [SEARCH.md](SEARCH.md).
 
 ### Contexto para LLM
 
-`GET /context/export?project=&topic=&categories[]=&maxTokens=&sections=`
+`GET /context/export?project=&topic=&maxTokens=&sections=`
 
 ```bash
 curl "http://localhost:11020/api/v1/context/export?project=med-unificando&topic=mcp&maxTokens=4000"

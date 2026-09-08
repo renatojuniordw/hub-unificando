@@ -16,6 +16,7 @@ export function parseMarkdownSections(markdown: string): ParsedSection[] {
   const sections: ParsedSection[] = [];
   let headingLineage: string[] = [];
   let buffer: string[] = [];
+  let fenceChar: string | null = null;
 
   const flush = (): void => {
     const hasContent = buffer.some((line) => line.trim().length > 0);
@@ -29,15 +30,30 @@ export function parseMarkdownSections(markdown: string): ParsedSection[] {
   };
 
   for (const line of lines) {
-    const match = /^(#{1,6})\s+(.*)$/.exec(line);
-    if (match) {
-      flush();
-      const level = match[1].length;
-      // Keep the ancestor headings (levels < level) and append this one,
-      // so the lineage is always contiguous: ["Arquitetura", "Módulos"].
-      headingLineage = headingLineage.slice(0, level - 1);
-      headingLineage.push(match[2].trim());
+    // Code fences: a `#` line inside a fence is content, not a heading. The
+    // closing fence must use the same marker char as the opening one.
+    const fenceMatch = /^\s*(`{3,}|~{3,})/.exec(line);
+    if (fenceMatch) {
+      const char = fenceMatch[1][0];
+      if (fenceChar === null) {
+        fenceChar = char;
+      } else if (char === fenceChar) {
+        fenceChar = null;
+      }
+      buffer.push(line);
       continue;
+    }
+    if (fenceChar === null) {
+      const match = /^(#{1,6})\s+(.*)$/.exec(line);
+      if (match) {
+        flush();
+        const level = match[1].length;
+        // Keep the ancestor headings (levels < level) and append this one,
+        // so the lineage is always contiguous: ["Arquitetura", "Módulos"].
+        headingLineage = headingLineage.slice(0, level - 1);
+        headingLineage.push(match[2].trim());
+        continue;
+      }
     }
     buffer.push(line);
   }

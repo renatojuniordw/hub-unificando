@@ -180,7 +180,12 @@ export function trigramSearch(
   return queryRows<ChunkHitRow[]>(prisma, query, ...params);
 }
 
-/** Bulk-persist chunk embeddings (batch). $1 = ids, $2 = vector literals. */
+/**
+ * Bulk-persist chunk embeddings (batch). $1 = ids, $2 = vector literals.
+ * Update-only by design: chunk rows are created (with content) before this
+ * runs, so every id must match. A mismatch means the chunk was purged
+ * concurrently — failing loudly beats silently dropping embeddings.
+ */
 export async function upsertChunkEmbeddings(
   prisma: PrismaService,
   rows: Array<{ id: string; vector: number[] }>,
@@ -188,7 +193,7 @@ export async function upsertChunkEmbeddings(
   if (rows.length === 0) return;
   const ids = rows.map((r) => r.id);
   const vectors = rows.map((r) => `[${r.vector.map((v) => v.toFixed(6)).join(',')}]`);
-  await prisma.$executeRawUnsafe(
+  const updated = await prisma.$executeRawUnsafe(
     `UPDATE chunks AS c
      SET embedding = v.vec::vector
      FROM UNNEST($1::text[], $2::text[]) AS v(id, vec)
@@ -196,6 +201,11 @@ export async function upsertChunkEmbeddings(
     ids,
     vectors,
   );
+  if (updated !== rows.length) {
+    throw new Error(
+      `upsertChunkEmbeddings: only ${updated}/${rows.length} chunk rows matched — embeddings not persisted (chunks purged concurrently?)`,
+    );
+  }
 }
 
 /** Bulk-persist category prototype embeddings (same batch pattern). */
@@ -216,19 +226,15 @@ export async function upsertCategoryPrototypes(
   );
 }
 
-/** Clears chunk embeddings for a document (or globally when documentId is null). */
+/** Clears chunk embeddings for a single document. */
 export async function clearDocumentEmbeddings(
   prisma: PrismaService,
-  documentId: string | null,
+  documentId: string,
 ): Promise<void> {
-  if (documentId) {
-    await prisma.$executeRawUnsafe(
-      'UPDATE chunks SET embedding = NULL WHERE "documentId" = $1',
-      documentId,
-    );
-    return;
-  }
-  await prisma.$executeRawUnsafe('UPDATE chunks SET embedding = NULL');
+  await prisma.$executeRawUnsafe(
+    'UPDATE chunks SET embedding = NULL WHERE "documentId" = $1',
+    documentId,
+  );
 }
 
 export async function countEmbeddedChunks(prisma: PrismaService): Promise<number> {

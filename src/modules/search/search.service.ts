@@ -23,6 +23,9 @@ export interface SearchInput {
   limit: number;
   /** Pagination offset for REST (page-1)*pageSize. */
   skip?: number;
+  /** Minimum fused score (RRF) — applied before limit/skip, so `total`
+   * reflects the qualifying pool, not the returned page. */
+  minScore?: number;
   strategy?: SearchStrategy;
 }
 
@@ -116,9 +119,15 @@ export class SearchService {
 
     const weights = FUSION[strategy];
     const ranked = this.fuse(vectorHits, keywordHits, trigramHits, weights);
-    const hits = ranked.slice(skip, skip + limit).map((entry) => this.toHit(entry));
+    // minScore corta ANTES do limit/skip: filtrar depois do slice esconderia
+    // hits qualificados fora da página e inflaria o total com o subconjunto.
+    const qualifying =
+      query.minScore !== undefined
+        ? ranked.filter((entry) => entry.rrf >= query.minScore!)
+        : ranked;
+    const hits = qualifying.slice(skip, skip + limit).map((entry) => this.toHit(entry));
 
-    const response: SearchResponse = { query: query.q, strategy, hits, total: ranked.length };
+    const response: SearchResponse = { query: query.q, strategy, hits, total: qualifying.length };
     await this.writeCache(cacheKey, response);
     return response;
   }
@@ -193,6 +202,7 @@ export class SearchService {
       query.contentKind ?? '',
       String(query.limit),
       String(query.skip ?? 0),
+      query.minScore !== undefined ? String(query.minScore) : '',
       query.strategy ?? 'balanced',
     ];
     return `search:v1:${parts.join('|')}`;

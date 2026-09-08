@@ -51,7 +51,10 @@ async function bootstrap(): Promise<void> {
   const document = SwaggerModule.createDocument(app, swaggerConfig);
   SwaggerModule.setup('api/docs', app, document);
 
-  // MCP Streamable HTTP — middleware puro no path /mcp (fora do prefixo /api/v1).
+  // MCP Streamable HTTP — middleware puro no path /mcp (fora do prefixo
+  // /api/v1). Registrado antes do listen: responde antes dos middlewares
+  // globais do Express (helmet, CORS do Nest) — /mcp tem allowlist, CORS e
+  // rate limit próprios (mcp.security.ts) e não deve herdá-los.
   const mcpHttp = app.get(McpHttpService);
   app.use(MCP_PATH, (req: Request, res: Response) => {
     void mcpHttp.handle(req, res);

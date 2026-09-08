@@ -51,7 +51,7 @@ export class McpHttpService {
       return;
     }
 
-    const sessionId = req.headers['mcp-session-id'] as string | undefined;
+    const sessionId = this.singleHeader(req.headers['mcp-session-id']);
 
     try {
       if (req.method === 'DELETE') {
@@ -111,6 +111,16 @@ export class McpHttpService {
       'Content-Length': Buffer.byteLength(payload),
     });
     res.end(payload);
+  }
+
+  /**
+   * Normaliza um header que pode chegar como string ou string[] (Node
+   * repete headers duplicados como array). Pega o primeiro valor — um
+   * array cru quebraria a lookup de sessão (404 falso-positivo).
+   */
+  private singleHeader(value: string | string[] | undefined): string | undefined {
+    if (Array.isArray(value)) return value[0];
+    return value;
   }
 
   /**

@@ -1,7 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
-  IsArray,
   IsIn,
   IsInt,
   IsNotEmpty,
@@ -36,13 +35,6 @@ export class ExportContextDto {
   @IsString()
   @MaxLength(500)
   topic?: string;
-
-  @ApiPropertyOptional({ description: 'Optional category filters', type: [String] })
-  @IsOptional()
-  @Type(() => String)
-  @IsArray()
-  @IsString({ each: true })
-  categories?: string[];
 
   @ApiPropertyOptional({ default: 6000, minimum: 500, maximum: 20000 })
   @IsOptional()

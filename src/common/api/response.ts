@@ -1,12 +1,8 @@
 /** API envelope types shared by the REST API (see docs/API.md). */
 
-export interface PaginationMeta {
-  page: number;
-  pageSize: number;
-  total: number;
-  totalPages: number;
-  hasNext: boolean;
-}
+import type { PaginationMeta } from '../dto/pagination.dto.js';
+
+export type { PaginationMeta };
 
 export interface ApiSuccess<T> {
   success: true;

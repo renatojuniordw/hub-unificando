@@ -81,16 +81,32 @@ export class ChunkService {
     const parts: string[] = [];
     let buffer = '';
     for (const paragraph of paragraphs) {
-      if (buffer.length > 0 && buffer.length + paragraph.length + 2 > this.maxChars) {
-        parts.push(buffer.trim());
-        // overlap: carry the tail of the previous buffer forward
-        const overlap = buffer.slice(-this.overlap);
-        buffer = overlap ? `${overlap}\n\n${paragraph}` : paragraph;
-      } else {
-        buffer = buffer ? `${buffer}\n\n${paragraph}` : paragraph;
+      // A single paragraph longer than the ceiling is hard-split by
+      // characters (with overlap) — otherwise the chunk would exceed
+      // maxChars no matter the paragraph boundaries.
+      for (const piece of this.splitOversizedParagraph(paragraph)) {
+        if (buffer.length > 0 && buffer.length + piece.length + 2 > this.maxChars) {
+          parts.push(buffer.trim());
+          // overlap: carry the tail of the previous buffer forward
+          const overlap = buffer.slice(-this.overlap);
+          buffer = overlap ? `${overlap}\n\n${piece}` : piece;
+        } else {
+          buffer = buffer ? `${buffer}\n\n${piece}` : piece;
+        }
       }
     }
     if (buffer.trim().length > 0) parts.push(buffer.trim());
     return parts;
+  }
+
+  private splitOversizedParagraph(paragraph: string): string[] {
+    if (paragraph.length <= this.maxChars) return [paragraph];
+    const pieces: string[] = [];
+    let start = 0;
+    while (start < paragraph.length) {
+      pieces.push(paragraph.slice(start, start + this.maxChars));
+      start += this.maxChars - this.overlap;
+    }
+    return pieces;
   }
 }

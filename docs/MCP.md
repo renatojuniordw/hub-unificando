@@ -34,7 +34,11 @@ Toda resposta HTTP do `/mcp` leva o header `mcp-protocol-version: 2025-06-18`
 | `exportar_contexto_llm` (R) | `project topic? maxTokens? sections?` | pacote de contexto tokenizado |
 | `listar_categorias` (R) | — | taxonomia com contagens |
 | `consultar_decisao` (R) | `project? q? status?` | ADRs |
-| `executar_ingestao` (W, admin) | `project? reset?` | job assíncrono (BullMQ) |
+| `executar_ingestao` (W, admin) | `project? force?` | job assíncrono (BullMQ) |
+
+> `buscar_trechos`: `minScore` filtra o ranking **antes** do corte `topK`, e
+> `total` reflete o pool qualificado — não o número de itens retornados na
+> página. Para navegar além de `topK` resultados usa-se a REST (`/search`).
 
 Formato de resposta de toda tool: content block de texto com JSON
 `{ "ok": true, "data": ... }` ou `{ "ok": false, "error": { "code", "message" } }`
@@ -58,7 +62,10 @@ registros além da página atual) e os itens na chave de cada coleção
    `Authorization: Bearer <key>` (comparação em tempo constante; 401).
    A tool **`executar_ingestao` só funciona com `MCP_API_KEY` configurada**.
 3. **Rate limit** próprio — `MCP_RATE_LIMIT` (default 120/min/IP, janela 60s,
-   bucket em memória; 429).
+   bucket em memória; 429). O IP vem do socket (`req.ip`); `x-forwarded-for`
+   só é considerado com `TRUST_PROXY=true`, usando a **última** entrada da
+   cadeia (a adicionada pelo proxy confiável) — sem `TRUST_PROXY`, XFF forjado
+   não contorna o limite (ver SECURITY.md).
 4. **`MCP_ENABLE_JSON_RESPONSE`** — `false` (default) → SSE; `true` → respostas
    JSON puras (mais simples para alguns clientes). Clientes que enviam
    `Accept: application/json, text/event-stream` recebem SSE; só

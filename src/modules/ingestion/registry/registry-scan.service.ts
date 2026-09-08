@@ -4,12 +4,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../infra/prisma/prisma.service';
 import { ENV, type Env } from '../../../shared/config/env';
 import { SCAN_EXCLUDED_DIRS } from '../../../shared/constants';
-
-export type StackEntry = {
-  name: string;
-  version: string;
-  role: string;
-};
+import type { StackEntry } from '../../projects/projects.types';
 
 /**
  * Refreshes the project registry from the real folder layout under
@@ -35,6 +30,8 @@ export class RegistryScanService {
     const entries = await readdir(root, { withFileTypes: true });
     for (const entry of entries) {
       if (!entry.isDirectory()) continue;
+      // Dot-directories (.git, .vercel, caches) are not projects.
+      if (entry.name.startsWith('.')) continue;
       if (SCAN_EXCLUDED_DIRS.includes(entry.name)) continue;
       found += 1;
 
@@ -46,7 +43,7 @@ export class RegistryScanService {
         continue;
       }
 
-      const pkg = await this.readPackage(root, entry.name);
+      const pkg = (await this.readPackage(root, entry.name)) ?? { stack: [] };
       await this.prisma.project.upsert({
         where: { slug: entry.name },
         create: {
@@ -73,25 +70,16 @@ export class RegistryScanService {
 
   /** Returns true when an existing record was updated from disk. */
   private async enrich(slug: string, folder: string): Promise<boolean> {
+    const pkg = await this.readPackage(this.env.HUB_SCAN_ROOT, folder);
+    if (!pkg) return false;
     try {
-      const raw = await readFile(join(this.env.HUB_SCAN_ROOT, folder, 'package.json'), 'utf8');
-      const pkg = JSON.parse(raw) as {
-        name?: string;
-        description?: string;
-        repository?: { url?: string } | string;
-        dependencies?: Record<string, string>;
-        devDependencies?: Record<string, string>;
-      };
-      const stack = resolveStack(pkg.dependencies ?? {}, pkg.devDependencies ?? {});
-      const repoUrl =
-        typeof pkg.repository === 'string' ? pkg.repository : (pkg.repository?.url ?? undefined);
       await this.prisma.project.update({
         where: { slug },
         data: {
           name: pkg.name ?? undefined,
           description: pkg.description ?? undefined,
-          repoUrl,
-          stack,
+          repoUrl: pkg.repoUrl,
+          stack: pkg.stack,
         },
       });
       return true;
@@ -103,7 +91,12 @@ export class RegistryScanService {
   private async readPackage(
     root: string,
     folder: string,
-  ): Promise<{ name?: string; description?: string; repoUrl?: string; stack: StackEntry[] }> {
+  ): Promise<{
+    name?: string;
+    description?: string;
+    repoUrl?: string;
+    stack: StackEntry[];
+  } | null> {
     try {
       const raw = await readFile(join(root, folder, 'package.json'), 'utf8');
       const pkg = JSON.parse(raw) as {
@@ -122,7 +115,7 @@ export class RegistryScanService {
         stack: resolveStack(pkg.dependencies ?? {}, pkg.devDependencies ?? {}),
       };
     } catch {
-      return { stack: [] };
+      return null;
     }
   }
 }

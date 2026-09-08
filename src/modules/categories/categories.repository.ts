@@ -30,8 +30,4 @@ export class CategoriesRepository {
   async findBySlug(slug: string): Promise<Category | null> {
     return this.prisma.category.findUnique({ where: { slug } });
   }
-
-  async all(): Promise<Category[]> {
-    return this.prisma.category.findMany({ orderBy: { name: 'asc' } });
-  }
 }

@@ -4,12 +4,13 @@ import type { Prisma, Project } from '../../../generated/prisma/client.js';
 import { PrismaService } from '../../../infra/prisma/prisma.service';
 import { upsertChunkEmbeddings } from '../../../infra/vector/vector.sql';
 import { ENV, type Env } from '../../../shared/config/env';
+import { TOKEN_CHARS_DIVISOR } from '../../../shared/constants';
 import { EmbeddingProvider } from '../../../infra/embedding/embedding.provider';
 import { ClassifierService } from '../../classification/classifier.service';
 import { applyPathSpecialization } from '../../classification/path-specialization';
-import { ChunkService } from '../chunking/chunk.service';
+import { ChunkService, type ChunkMode, type ChunkOutput } from '../chunking/chunk.service';
 import { detectLanguage } from '../parsing/sections';
-import { parseFrontmatter } from '../parsing/frontmatter';
+import { isBlogPostFrontmatter, parseFrontmatter, type Frontmatter } from '../parsing/frontmatter';
 import { resolveKnowledgeLibRoot, resolveProjectRoot } from '../scan/project-source';
 import { ScannerService, type ScannedFile } from '../scan/scanner.service';
 
@@ -27,6 +28,9 @@ import {
   slugify,
 } from '../repository/ingestion-write.repository';
 import type { DocumentDraft, IngestOptions, IngestStats, IngestionScope } from '../ingestion.types';
+
+/** Per-file counters shared by ingestProject → ingestFile. */
+type FileIngestStats = Omit<IngestStats, 'projects'>;
 
 /**
  * End-to-end ingestion pipeline for one or more projects:
@@ -85,10 +89,7 @@ export class IngestionOrchestrator {
     return stats;
   }
 
-  private async ingestProject(
-    project: Project,
-    options: IngestOptions,
-  ): Promise<Omit<IngestStats, 'projects'>> {
+  private async ingestProject(project: Project, options: IngestOptions): Promise<FileIngestStats> {
     // Absolute folderPaths (tests/fixtures) win; relative ones resolve to the
     // committed knowledge lib (KNOWLEDGE_LIB_ROOT/<slug>) when mirrored there,
     // otherwise fall back to the sibling projects under HUB_SCAN_ROOT.
@@ -96,13 +97,13 @@ export class IngestionOrchestrator {
       knowledgeLibRoot: resolveKnowledgeLibRoot(this.env.KNOWLEDGE_LIB_ROOT),
       scanRoot: this.env.HUB_SCAN_ROOT,
     });
-    const stats = {
+    const stats: FileIngestStats = {
       documents: 0,
       chunks: 0,
       embeddedChunks: 0,
       skipped: 0,
       errors: 0,
-      errorsByPath: [] as string[],
+      errorsByPath: [],
     };
     if (options.reset && !options.dryRun) {
       await this.prisma.document.deleteMany({ where: { projectSlug: project.slug } });
@@ -192,14 +193,7 @@ export class IngestionOrchestrator {
     project: Project,
     file: ScannedFile,
     options: IngestOptions,
-    stats: {
-      documents: number;
-      chunks: number;
-      embeddedChunks: number;
-      skipped: number;
-      errors: number;
-      errorsByPath: string[];
-    },
+    stats: FileIngestStats,
   ): Promise<void> {
     const mode = /\.mdx?$/i.test(file.relativePath) ? ('markdown' as const) : ('txt' as const);
     const chunks = this.chunkService.chunk(mode, file.content);
@@ -212,10 +206,33 @@ export class IngestionOrchestrator {
       return;
     }
 
+    // Blog gating: non-posts and drafts are never indexed; a previously
+    // published version is purged so the sketch stops being served
+    // (see purgeUnpublishableBlogFile).
+    const isBlogPath = isBlogRelativePath(file.relativePath);
+    const frontmatter = isBlogPath ? parseFrontmatter(file.content) : null;
+    const isBlogPost =
+      isBlogPath && isBlogPostFrontmatter(frontmatter ?? { hasFrontmatter: false });
+    if (isBlogPath && (!isBlogPost || frontmatter?.draft === true)) {
+      await this.purgeUnpublishableBlogFile(project.slug, file.relativePath, options);
+      this.logger.log(
+        `Skipping "${file.relativePath}": ${isBlogPost ? 'draft' : 'no title+date frontmatter'} post (never embedded/exposed)`,
+      );
+      stats.skipped += 1;
+      return;
+    }
+    const publishedAt = isBlogPost && frontmatter?.date ? parseBlogDate(frontmatter.date) : null;
+    if (isBlogPost && publishedAt === null) {
+      // Unparseable date: the file is no longer a publishable post either.
+      await this.purgeUnpublishableBlogFile(project.slug, file.relativePath, options);
+      this.logger.warn(`Skipping "${file.relativePath}": blog post date is not parseable`);
+      stats.skipped += 1;
+      return;
+    }
+
     const firstHeading = chunks.find((chunk) => chunk.heading)?.heading;
     const title =
       firstHeading ?? basename(file.relativePath).replace(/\.[^.]+$/, '') ?? file.relativePath;
-
     // The title itself carries category signal (e.g. "SEO — Unificando UI").
     const documentText = `${title}\n\n${chunks.map((chunk) => chunk.content).join('\n\n')}`.slice(
       0,
@@ -225,91 +242,16 @@ export class IngestionOrchestrator {
       ? { category: 'general', categories: ['general'] }
       : await this.classifier.classify(documentText);
 
-    // Path specialization (spec §8.2.5) wins over the classifier primary label.
-    const pathRule = applyPathSpecialization(file.relativePath, documentText);
-    const category = pathRule?.category ?? classification.category;
-    const categories = pathRule
-      ? pathRule.categories && pathRule.categories.length > 0
-        ? pathRule.categories
-        : pathRule.mergeSemantic
-          ? Array.from(new Set([pathRule.category, ...classification.categories]))
-          : [pathRule.category]
-      : classification.categories;
-
-    const summary = chunks[0]?.content.slice(0, 400) ?? '';
-    const docType = mode;
-    const named = basename(file.relativePath);
-
-    // Blog posts (portfolio-ui `src/content/blog/*.md`) carry their own title,
-    // date, tags and reading time in frontmatter. A file that is not a real
-    // post (no title+date) is skipped entirely — drafts are never embedded.
-    // A published post that becomes a draft stops being exposed: the existing
-    // document is removed (see purgeUnpublishableBlogFile).
-    const isBlogPath = isBlogRelativePath(file.relativePath);
-    const frontmatter = isBlogPath ? parseFrontmatter(file.content) : null;
-    const isBlogPost = frontmatter?.hasFrontmatter === true && isBlogPath;
-
-    // Non-post or draft blog files are never indexed; any previously published
-    // document for this path is removed so the draft/sketch stops being served.
-    if (isBlogPath && (!isBlogPost || frontmatter?.draft === true || !frontmatter?.date)) {
-      await this.purgeUnpublishableBlogFile(project.slug, file.relativePath, options);
-      this.logger.log(
-        `Skipping "${file.relativePath}": ${isBlogPost ? 'draft' : 'no title+date frontmatter'} post (never embedded/exposed)`,
-      );
-      stats.skipped += 1;
-      return;
-    }
-
-    let contentKind = named.startsWith('README')
-      ? 'README'
-      : /^(CLAUDE|AGENTS)\.md$/.test(named)
-        ? 'AGENT-GUIDE'
-        : pathRule?.category === 'prompt'
-          ? 'PROMPT'
-          : mode === 'markdown'
-            ? 'MARKDOWN'
-            : 'TEXT';
-    if (isBlogPost) contentKind = 'blog-post';
-
-    const publishedAt = isBlogPost && frontmatter?.date ? parseBlogDate(frontmatter.date) : null;
-    if (isBlogPost && publishedAt === null) {
-      this.logger.warn(`Skipping "${file.relativePath}": blog post date is not parseable`);
-      stats.skipped += 1;
-      return;
-    }
-    const isDraft = false; // drafts already skipped above
-
-    const metadata = {
-      headings: chunks
-        .map((chunk) => chunk.heading)
-        .filter((h): h is string => Boolean(h))
-        .slice(0, 10),
-      ...(isBlogPost && frontmatter?.readingTime ? { readingTime: frontmatter.readingTime } : {}),
-      ...(pathRule?.metadata ?? {}),
-    };
-
-    const draft: DocumentDraft = {
-      projectSlug: project.slug,
-      path: file.relativePath,
-      title: isBlogPost && frontmatter?.title ? frontmatter.title : title,
-      summary: isBlogPost && frontmatter?.description ? frontmatter.description : summary,
-      lang: detectLanguage(file.content),
-      // Category follows the normal classifier; blog-ness is carried by
-      // contentKind="blog-post" (the canonical signal for filters/endpoints).
-      category,
-      categories: isBlogPost
-        ? Array.from(new Set([...categories, ...(frontmatter?.tags ?? [])]))
-        : categories,
-      docType,
-      contentKind,
-      tags: frontmatter?.tags ?? [],
+    const draft = this.buildDocumentDraft(project, file, chunks, {
+      mode,
+      title,
+      documentText,
+      classification,
+      isBlogPost,
+      frontmatter,
       publishedAt,
-      isDraft,
       sourceSha,
-      charCount: file.content.length,
-      tokenEstimate: Math.ceil(file.content.length / 4),
-      metadata,
-    };
+    });
 
     if (options.dryRun) {
       stats.documents += 1;
@@ -317,6 +259,94 @@ export class IngestionOrchestrator {
       return;
     }
 
+    await this.persistDocument(project, file, draft, chunks, stats);
+  }
+
+  /** Assembles the DocumentDraft: path rules, content kind, metadata, summary. */
+  private buildDocumentDraft(
+    project: Project,
+    file: ScannedFile,
+    chunks: ChunkOutput[],
+    ctx: {
+      mode: ChunkMode;
+      title: string;
+      documentText: string;
+      classification: { category: string; categories: string[] };
+      isBlogPost: boolean;
+      frontmatter: Frontmatter | null;
+      publishedAt: Date | null;
+      sourceSha: string;
+    },
+  ): DocumentDraft {
+    // Path specialization (spec §8.2.5) wins over the classifier primary label.
+    const pathRule = applyPathSpecialization(file.relativePath, ctx.documentText);
+    const category = pathRule?.category ?? ctx.classification.category;
+    const categories = pathRule
+      ? pathRule.categories && pathRule.categories.length > 0
+        ? pathRule.categories
+        : pathRule.mergeSemantic
+          ? Array.from(new Set([pathRule.category, ...ctx.classification.categories]))
+          : [pathRule.category]
+      : ctx.classification.categories;
+
+    const named = basename(file.relativePath);
+    let contentKind = named.startsWith('README')
+      ? 'README'
+      : /^(CLAUDE|AGENTS)\.md$/.test(named)
+        ? 'AGENT-GUIDE'
+        : pathRule?.category === 'prompt'
+          ? 'PROMPT'
+          : ctx.mode === 'markdown'
+            ? 'MARKDOWN'
+            : 'TEXT';
+    if (ctx.isBlogPost) contentKind = 'blog-post';
+
+    const metadata = {
+      headings: chunks
+        .map((chunk) => chunk.heading)
+        .filter((h): h is string => Boolean(h))
+        .slice(0, 10),
+      ...(ctx.isBlogPost && ctx.frontmatter?.readingTime
+        ? { readingTime: ctx.frontmatter.readingTime }
+        : {}),
+      ...(pathRule?.metadata ?? {}),
+    };
+
+    return {
+      projectSlug: project.slug,
+      path: file.relativePath,
+      title: ctx.isBlogPost && ctx.frontmatter?.title ? ctx.frontmatter.title : ctx.title,
+      summary:
+        ctx.isBlogPost && ctx.frontmatter?.description
+          ? ctx.frontmatter.description
+          : (chunks[0]?.content.slice(0, 400) ?? ''),
+      lang: detectLanguage(file.content),
+      // Category follows the normal classifier; blog-ness is carried by
+      // contentKind="blog-post" (the canonical signal for filters/endpoints).
+      category,
+      categories: ctx.isBlogPost
+        ? Array.from(new Set([...categories, ...(ctx.frontmatter?.tags ?? [])]))
+        : categories,
+      docType: ctx.mode,
+      contentKind,
+      tags: ctx.frontmatter?.tags ?? [],
+      publishedAt: ctx.publishedAt,
+      isDraft: false, // drafts already skipped above
+      sourceSha: ctx.sourceSha,
+      charCount: file.content.length,
+      tokenEstimate: Math.ceil(file.content.length / TOKEN_CHARS_DIVISOR),
+      metadata,
+    };
+  }
+
+  /** Persists the draft, embeds its chunks and mirrors ADR files. */
+  private async persistDocument(
+    project: Project,
+    file: ScannedFile,
+    draft: DocumentDraft,
+    chunks: ChunkOutput[],
+    stats: FileIngestStats,
+  ): Promise<void> {
     const replaced = await this.writeRepo.replaceDocument(
       draft,
       chunks.map((chunk, index) => ({
@@ -326,7 +356,7 @@ export class IngestionOrchestrator {
         anchor: chunk.heading
           ? `${file.relativePath}#${slugify(chunk.heading)}`
           : file.relativePath,
-        tokenCount: Math.ceil(chunk.content.length / 4),
+        tokenCount: Math.ceil(chunk.content.length / TOKEN_CHARS_DIVISOR),
         contentHash: sha256(chunk.content),
       })),
     );

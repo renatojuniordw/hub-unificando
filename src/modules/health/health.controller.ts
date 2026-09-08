@@ -23,10 +23,20 @@ export class HealthController {
     } catch {
       db = false;
     }
-    const redis = await this.redis.ping();
-    const embeddedChunks = db ? await countEmbeddedChunks(this.prisma) : 0;
+    // Disabled Redis is intentional, not a failure (same semantics as the CLI).
+    const redis = this.redis.get() === null ? true : await this.redis.ping();
+    // A failing embeddings count must degrade the endpoint, never throw —
+    // this is the readiness probe.
+    let embeddedChunks: number | null = null;
+    if (db) {
+      try {
+        embeddedChunks = await countEmbeddedChunks(this.prisma);
+      } catch {
+        embeddedChunks = null;
+      }
+    }
     return {
-      status: db ? 'ok' : 'degraded',
+      status: db && redis && embeddedChunks !== null ? 'ok' : 'degraded',
       service: 'hub-unificando',
       version,
       checks: { db, redis },

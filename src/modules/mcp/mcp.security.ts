@@ -51,7 +51,7 @@ export function checkMcpSecurity(
   }
 
   // 3. Rate limit por IP
-  const ip = clientIp(req);
+  const ip = clientIp(req, env.TRUST_PROXY);
   const now = Date.now();
   const bucket = buckets.get(ip);
   if (!bucket || now > bucket.resetAt) {
@@ -70,12 +70,22 @@ export function checkMcpSecurity(
   return { ok: true };
 }
 
-export function clientIp(req: IncomingMessage): string {
+/**
+ * IP do cliente para rate limit. x-forwarded-for só é considerado quando o
+ * hub roda atrás de proxy reverso confiável (TRUST_PROXY=true) — e nesse caso
+ * usa a ÚLTIMA entrada (a adicionada pelo proxy confiável), não a primeira
+ * (que o cliente pode forjar).
+ */
+export function clientIp(req: IncomingMessage, trustProxy: boolean): string {
+  const socket = req.socket.remoteAddress ?? 'unknown';
+  if (!trustProxy) return socket;
   const forwarded = req.headers['x-forwarded-for'];
-  if (typeof forwarded === 'string' && forwarded.length > 0) {
-    return forwarded.split(',')[0]?.trim() ?? 'unknown';
-  }
-  return req.socket.remoteAddress ?? 'unknown';
+  if (typeof forwarded !== 'string' || forwarded.length === 0) return socket;
+  const hops = forwarded
+    .split(',')
+    .map((h) => h.trim())
+    .filter(Boolean);
+  return hops[hops.length - 1] ?? socket;
 }
 
 /** Aplica CORS quando a origem está na allowlist (o transporte não emite). */

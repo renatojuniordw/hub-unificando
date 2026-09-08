@@ -35,6 +35,10 @@ const EnvSchema = z.object({
   MCP_SESSION_TTL_MIN: intFromEnv(60),
   MCP_ENABLE_JSON_RESPONSE: boolFromEnv('false'),
   MCP_RATE_LIMIT: intFromEnv(120),
+  // true quando o hub roda atrás de proxy reverso confiável: o IP do cliente
+  // (rate limit REST/MCP) passa a vir de x-forwarded-for. false = exposição
+  // direta — XFF é ignorado (header é forjável pelo cliente).
+  TRUST_PROXY: boolFromEnv('false'),
   THROTTLE_READ: intFromEnv(120),
   THROTTLE_WRITE: intFromEnv(30),
   CORS_ORIGINS: z.string().default('http://localhost:11020'),

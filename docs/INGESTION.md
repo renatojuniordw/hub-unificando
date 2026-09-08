@@ -102,8 +102,8 @@ mapped projects `hub sync-docs` additionally **extracts** every
   vendor repo inside a project) are skipped — they are separate codebases.
 - **Curated scope** (`isKnowledgePath` in `knowledge-path.ts`) — a file is
   indexed only when it is real documentation: `README.md`/`CLAUDE.md`/
-  `AGENTS.md` at the project root, any file under a `docs`/`documentation`
-  folder at any depth, `prompts/` at the root, or blog posts at
+  `AGENTS.md` at the project root, any file under a `docs`/`documentation`/
+  `documentacao` folder at any depth, `prompts/` at the root, or blog posts at
   `src/content/blog/<slug>.md` (the single content/ exception, portfolio-ui)
   — always with a `.md`/`.mdx`/`.txt` extension. Loose `.md` files elsewhere
   (`notes.md`, `public/llms.txt`, `src/docs.ts`, …) are skipped. A re-run
@@ -119,7 +119,8 @@ mapped projects `hub sync-docs` additionally **extracts** every
 - `parseMarkdownSections` splits markdown on `#`-`######` headings; each
   section carries the **heading lineage** from the document root down
   (e.g. `["Arquitetura", "Módulos"]`), resetting per level. Code fences and
-  lists are preserved verbatim.
+  lists are preserved verbatim; **a `#` line inside a code fence is content,
+  not a heading** (the fence opener/closer may use ` or ~).
 - `parsePlainText` turns a `.txt` file into one unheaded section.
 - `detectLanguage` returns `pt-BR` | `en` | `unknown` from the first 2000
   chars (stored on `documents.lang`).
@@ -130,7 +131,6 @@ mapped projects `hub sync-docs` additionally **extracts** every
 
 | Constant | Value | Meaning |
 |---|---|---|
-| `CHUNK_TARGET_MIN_CHARS` | 800 | soft minimum (heading-boundary chunks may be shorter by design) |
 | `CHUNK_TARGET_MAX_CHARS` | 1500 | hard cap before flush/split |
 | `CHUNK_OVERLAP_CHARS` | 150 | chars carried between split parts |
 
@@ -139,8 +139,10 @@ would overflow `maxChars` flushes it first. A **top-level heading change also
 flushes** — two H1 documents never share a chunk (sub-headings under the same
 H1 still merge). A single section larger than `maxChars` is split by
 `splitLongSection` on blank-line paragraph boundaries, carrying the last 150
-chars of each part into the next. Each chunk stores its heading lineage
-joined with `" > "` and a slugified `anchor`
+chars of each part into the next. **A single paragraph longer than `maxChars`
+is hard-split by characters** (with the same overlap) — no chunk ever exceeds
+the cap, even without paragraph boundaries. Each chunk stores its heading
+lineage joined with `" > "` and a slugified `anchor`
 (`docs/DATABASE.md#banco-de-dados-tecnologia`), built in the orchestrator.
 
 ## Dedupe and re-index

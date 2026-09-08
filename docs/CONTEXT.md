@@ -30,7 +30,6 @@ heuristic `TOKEN_CHARS_DIVISOR = 4` (`src/shared/constants.ts`):
 |---|---|---|
 | `project` | string | **required** — project slug |
 | `topic` | string | optional, max 500 chars; appended to each section query |
-| `categories` | string[] | optional category slugs (repeat `categories[]=`) |
 | `maxTokens` | int | 500–20000, default **6000** |
 | `sections` | string | optional CSV of section ids (e.g. `arquitetura,fontes`) |
 

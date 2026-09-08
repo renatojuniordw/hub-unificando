@@ -18,8 +18,4 @@ export class CategoriesService {
     }
     return category;
   }
-
-  async allForClassification(): Promise<Category[]> {
-    return this.repository.all();
-  }
 }

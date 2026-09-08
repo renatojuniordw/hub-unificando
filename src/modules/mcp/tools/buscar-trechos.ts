@@ -19,20 +19,21 @@ export function buscarTrechos(deps: McpDeps): McpToolDefinition<typeof schema> {
       'Busca híbrida (vetorial + keyword + fuzzy com RRF) por trechos citáveis no conhecimento indexado.',
     inputSchema: schema,
     handler: async ({ query, project, category, contentKind, topK, minScore }) => {
+      // minScore é aplicado no ranking (antes do topK): o total reflete o
+      // pool qualificado, não o subconjunto já cortado pelo limite.
       const result = await deps.search.search({
         q: query,
         projectSlug: project,
         category,
         contentKind,
         limit: topK ?? 10,
+        minScore,
         strategy: 'balanced',
       });
-      const hits =
-        minScore !== undefined ? result.hits.filter((hit) => hit.score >= minScore) : result.hits;
       return {
         query,
-        total: hits.length,
-        hits: hits.map((hit) => ({
+        total: result.total,
+        hits: result.hits.map((hit) => ({
           projectSlug: hit.projectSlug,
           documentId: hit.documentId,
           path: hit.path,

@@ -18,6 +18,12 @@ export class CreateIngestionJobDto {
   force?: boolean;
 }
 
+// THROTTLE_WRITE do env (default 30/min) — avaliado no load do módulo,
+// antes do validateEnv do bootstrap (decorators rodam no import).
+const WRITE_THROTTLE = {
+  default: { limit: Number(process.env.THROTTLE_WRITE ?? 30), ttl: 60_000 },
+} as const;
+
 @ApiTags('ingestion')
 @ApiBearerAuth()
 @Controller('ingest')
@@ -30,7 +36,7 @@ export class IngestionController {
 
   @Post('jobs')
   @UseGuards(AdminGuard)
-  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  @Throttle(WRITE_THROTTLE)
   @ApiOperation({ summary: 'Enqueue an ingestion job (admin, async via BullMQ)' })
   async createJob(@Body() dto: CreateIngestionJobDto) {
     const enabled = this.queue.isEnabled();

@@ -141,5 +141,22 @@ describe('McpHttpService', () => {
       const body = JSON.parse(res.body ?? '{}') as unknown as { error?: string };
       expect(body.error).toBeDefined();
     });
+
+    it('aceita mcp-session-id repetido (array de headers) sem quebrar a sessão', async () => {
+      const { service, sessionManager } = makeService();
+      const transport = { handleRequest: jest.fn().mockResolvedValue(undefined) };
+      sessionManager.get.mockReturnValue(transport);
+      const req = makeReq('POST', {
+        // Node repete headers duplicados como array.
+        'mcp-session-id': ['sessao-ativa', 'sessao-ativa'] as unknown as string,
+      });
+      const res = makeRes();
+
+      await handle(service, req, res);
+
+      // A sessão foi encontrada (transport usado) — não virou 404.
+      expect(transport.handleRequest).toHaveBeenCalled();
+      expect(res.statusCode).not.toBe(404);
+    });
   });
 });

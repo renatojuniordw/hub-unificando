@@ -27,7 +27,6 @@ export interface LLMContextPackage {
 export interface ExportContextParams {
   projectSlug: string;
   topic?: string;
-  categories?: string[];
   maxTokens: number;
   /** Section ids to include; all when omitted. */
   sections?: ContextSectionId[];

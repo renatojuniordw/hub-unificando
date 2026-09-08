@@ -21,6 +21,12 @@ describe('isKnowledgePath (curated knowledge scope)', () => {
     expect(isKnowledgePath('a/b/c/documentation/guide.mdx')).toBe(true);
   });
 
+  it('includes documentacao/ folders (pt-BR documentation)', () => {
+    expect(isKnowledgePath('documentacao/api.md')).toBe(true);
+    expect(isKnowledgePath('x/documentacao/sub/guia.md')).toBe(true);
+    expect(isKnowledgePath('src/documentacao/outra.md')).toBe(true);
+  });
+
   it('includes prompts/ at the project root', () => {
     expect(isKnowledgePath('prompts/base.md')).toBe(true);
     expect(isKnowledgePath('prompts/nested/prompt.md')).toBe(true);

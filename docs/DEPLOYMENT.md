@@ -96,10 +96,20 @@ npm run hub -- sync-docs
 git add knowledge && git commit -m "docs: sync knowledge lib"
 
 # on the VPS
+export POSTGRES_PASSWORD="$(openssl rand -base64 32)"   # OBRIGATÓRIO — sem a
+                                                          # variável o compose
+                                                          # falha (fail-closed)
 docker compose -f docker-compose.prod.yml up -d --build
 docker compose -f docker-compose.prod.yml logs -f app      # first boot ingests
 docker compose -f docker-compose.prod.yml exec app node dist/src/cli.js status
 ```
+
+O `docker-compose.prod.yml` aplica hardening (os mesmos `security_opt` /
+`cap_drop`/`read_only` do compose dev) e **exige `POSTGRES_PASSWORD`**: sem a
+variável no ambiente, o compose falha no `up` em vez de subir com senha
+default. Atrás de proxy reverso (nginx/traefik), exporte também
+`TRUST_PROXY=true` — só então o rate limit confia no `x-forwarded-for`
+(ver SECURITY.md); exposição direta mantém `false` (default).
 
 ## Local development
 

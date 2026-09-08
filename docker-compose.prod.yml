@@ -10,13 +10,24 @@
 #
 # Uso:
 #   docker compose -f docker-compose.prod.yml up -d --build
+#
+# POSTGRES_PASSWORD é obrigatório: sem a variável o compose falha no boot
+# (fail-closed) — nunca sobe com senha default.
+#
+# Hardening (cap_drop/read_only) aplicado SÓ no app: os entrypoints oficiais
+# de postgres e redis rodam como root e fazem chown/setuid para descer ao
+# usuário de serviço — `cap_drop: ALL` nesses containers impede o boot
+# (verificado empiricamente).
+
 services:
   db:
     image: pgvector/pgvector:pg16
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
     environment:
       POSTGRES_USER: hub
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-hub}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD é obrigatório no .env de produção}
       POSTGRES_DB: hub_unificando
     volumes:
       - pgdata:/var/lib/postgresql/data
@@ -29,6 +40,8 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
     command: ['redis-server', '--appendonly', 'yes']
     volumes:
       - redisdata:/data
@@ -48,10 +61,17 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
     environment:
       NODE_ENV: production
       PORT: '11020'
-      DATABASE_URL: postgresql://hub:${POSTGRES_PASSWORD:-hub}@db:5432/hub_unificando
+      DATABASE_URL: postgresql://hub:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD é obrigatório}@db:5432/hub_unificando
       REDIS_URL: redis://redis:6379
       REDIS_ENABLED: 'true'
       KNOWLEDGE_LIB_ROOT: /app/knowledge
@@ -64,6 +84,8 @@ services:
       MCP_SESSION_TTL_MIN: ${MCP_SESSION_TTL_MIN:-60}
       MCP_RATE_LIMIT: ${MCP_RATE_LIMIT:-120}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:11020}
+      # true somente atrás de proxy reverso confiável (nginx/traefik na VPS)
+      TRUST_PROXY: ${TRUST_PROXY:-false}
     ports:
       - '${HUB_PORT:-11020}:11020'
     volumes:

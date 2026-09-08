@@ -27,7 +27,6 @@ export class ContextController {
     return this.assembler.export({
       projectSlug: query.project,
       topic: query.topic,
-      categories: query.categories,
       maxTokens: query.maxTokens,
       sections: parseContextSections(query.sections) ?? undefined,
     });

@@ -4,8 +4,7 @@ import type { McpDeps } from './mcp.deps';
 
 const schema = z.object({
   project: z.string().optional().describe('slug do projeto; ausente = todos os habilitados'),
-  path: z.string().optional().describe('reservado para ingestão por arquivo (v2)'),
-  reset: z.boolean().optional().describe('true = força reindexação mesmo sem mudança de hash'),
+  force: z.boolean().optional().describe('true = força reindexação mesmo sem mudança de hash'),
 });
 
 /**
@@ -18,7 +17,7 @@ export function executarIngestao(deps: McpDeps): McpToolDefinition<typeof schema
     description:
       'Dispara um job assíncrono de ingestão (admin). Requer MCP_API_KEY configurada no servidor.',
     inputSchema: schema,
-    handler: async ({ project, reset }) => {
+    handler: async ({ project, force }) => {
       if (!deps.env.MCP_API_KEY) {
         throw new Error('Ingestão via MCP desabilitada: MCP_API_KEY não configurada');
       }
@@ -27,11 +26,11 @@ export function executarIngestao(deps: McpDeps): McpToolDefinition<typeof schema
       }
       const job = await deps.writeRepo.createJob('ingest', {
         projectSlug: project ?? null,
-        reset: reset ?? false,
+        force: force ?? false,
       });
       const enqueued = await deps.queue.enqueue(
         { projectSlug: project },
-        { force: reset ?? false, dryRun: false },
+        { force: force ?? false, dryRun: false },
         job.id,
       );
       return {

@@ -2,7 +2,7 @@
 export const KNOWLEDGE_ROOT_NAMES = new Set(['README.md', 'CLAUDE.md', 'AGENTS.md']);
 
 /** Documentation folders at any depth below the project root. */
-const KNOWLEDGE_DIRS = new Set(['docs', 'documentation']);
+const KNOWLEDGE_DIRS = new Set(['docs', 'documentation', 'documentacao']);
 
 /** Blog content folders: `src/content/blog/<slug>.md` (portfolio-ui). */
 export const BLOG_CONTENT_PATH = 'src/content/blog';

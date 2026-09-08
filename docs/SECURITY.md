@@ -39,9 +39,12 @@ or a way to pivot into the host.
   2. **Bearer API key** — when `MCP_API_KEY` is set, every request needs
      `Authorization: Bearer <key>`; comparison hashes both sides with SHA-256
      before `timingSafeEqual` (**constant-time**, lengths never leak).
-  3. **Per-IP rate limit** — sliding 60s window per `clientIp()`
-     (`x-forwarded-for` first hop, else socket address), limit
-     `MCP_RATE_LIMIT` (default 120/min) → `429`.
+  3. **Per-IP rate limit** — sliding 60s window per `clientIp()`. O IP vem do
+     socket (`req.socket.remoteAddress`); `x-forwarded-for` só é considerado
+     com `TRUST_PROXY=true` (atrás de proxy reverso), usando a **última**
+     entrada da cadeia (a adicionada pelo proxy confiável). Com
+     `TRUST_PROXY=false` (default, exposição direta), XFF forjado não
+     contorna o limite. Limite `MCP_RATE_LIMIT` (default 120/min) → `429`.
   - The write tool `executar_ingestao` additionally refuses to run when
     `MCP_API_KEY` is not configured, and requires Redis to be enabled.
 
@@ -93,8 +96,9 @@ or a way to pivot into the host.
 ## DoS / rate limiting
 
 - **REST** — `ThrottlerModule` per-IP 60s windows: `THROTTLE_READ` (120/min)
-  globally, and `POST /ingest/jobs` carries a stricter `@Throttle`
-  30/min (`THROTTLE_WRITE` mirror in env).
+  globally, and `POST /ingest/jobs` carrega `@Throttle(THROTTLE_WRITE)`
+  (default 30/min, configurável via env). O `req.ip` do Express segue o
+  mesmo `trust proxy` da config — fora de proxy, não confia em XFF.
 - **MCP** — dedicated per-IP bucket (see above), session cap
   `MAX_SESSIONS = 10_000` with TTL sweep (60 min sliding, `mcp.session-manager.ts`).
 - **Search costs** — embedding + three top-K queries per call are bounded:
@@ -138,5 +142,7 @@ or a way to pivot into the host.
   `/health`.
 - In production behind a TLS-terminating proxy, set
   `NODE_ENV=production` (pino autoLogging stays on, pretty transport off) and
-  forward real client IPs via a trusted `x-forwarded-for` so per-IP limits
-  cannot be spoofed.
+  `TRUST_PROXY=true` (env) — com o flag, o rate limit (REST e MCP) passa a
+  confiar no `x-forwarded-for` adicionado pelo proxy e usa a **última**
+  entrada. Em exposição direta (sem proxy), mantenha `TRUST_PROXY=false`
+  (default): XFF do cliente é ignorado e não contorna os limites por IP.

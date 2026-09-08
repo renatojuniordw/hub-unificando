@@ -3,7 +3,6 @@ import type { Project } from '../../generated/prisma/client.js';
 import { paginate, type Paginated } from '../../common/dto/pagination.dto';
 import type { DocumentWithProject } from '../documents/documents.repository';
 import { DocumentsService } from '../documents/documents.service';
-import { DecisionsService } from '../decisions/decisions.service';
 import { ProjectsRepository } from './projects.repository';
 import type { ProjectCounts } from './projects.types';
 
@@ -35,7 +34,6 @@ export class ProjectsService {
   constructor(
     private readonly repository: ProjectsRepository,
     private readonly documentsService: DocumentsService,
-    private readonly decisionsService: DecisionsService,
   ) {}
 
   async list(
@@ -84,24 +82,5 @@ export class ProjectsService {
       counts: counts.get(slug) ?? { documents: 0, chunks: 0, decisions: 0 },
       documents,
     };
-  }
-
-  /** Convenience for other modules needing a validated project slug. */
-  async getOrThrow(slug: string): Promise<Project> {
-    const project = await this.repository.findBySlug(slug);
-    if (!project) {
-      throw new NotFoundException(`Project "${slug}" not found`);
-    }
-    return project;
-  }
-
-  /** Delegation used by nested routes (decisions count is part of detail). */
-  getDecisionsByProject(
-    projectSlug: string,
-    status: string | undefined,
-    page: number,
-    pageSize: number,
-  ) {
-    return this.decisionsService.list(projectSlug, status, undefined, page, pageSize);
   }
 }
