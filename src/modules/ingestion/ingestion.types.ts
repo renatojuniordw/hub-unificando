@@ -40,6 +40,9 @@ export interface DocumentDraft {
   categories: string[];
   docType: string;
   contentKind: string | null;
+  tags: string[];
+  publishedAt: Date | null;
+  isDraft: boolean;
   sourceSha: string;
   charCount: number;
   tokenEstimate: number;

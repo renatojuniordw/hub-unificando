@@ -12,7 +12,7 @@ export function listarProjetos(deps: McpDeps): McpToolDefinition<typeof schema> 
       'Lista o registry de projetos do ecossistema Unificando (slug, nome, descrição, repo, stack, tags, contagem de documentos).',
     inputSchema: schema,
     handler: async () => {
-      const result = await deps.projects.list(undefined, 1, 100);
+      const result = await deps.projects.list(undefined, undefined, undefined, 1, 100);
       return { total: result.meta.total, projects: result.data };
     },
   };

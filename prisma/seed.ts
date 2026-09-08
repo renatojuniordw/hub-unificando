@@ -5,7 +5,7 @@
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../src/generated/prisma/client.js';
 import { CATEGORY_SEEDS } from './seed/categories.js';
-import { REGISTRY_SEEDS } from './seed/registry.js';
+import { FINAL_REGISTRY_SEEDS as REGISTRY_SEEDS } from './seed/registry.js';
 
 const connectionString =
   process.env.DATABASE_URL ?? 'postgresql://hub:hub@localhost:11022/hub_unificando';
@@ -40,6 +40,9 @@ async function main(): Promise<void> {
         tags: data.tags,
         sourceType: data.sourceType,
         enabled: data.enabled ?? true,
+        surfaces: data.surfaces,
+        status: data.status,
+        featured: data.featured,
         metadata: metadata as object | undefined,
       },
     });

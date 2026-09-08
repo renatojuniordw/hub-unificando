@@ -17,6 +17,9 @@ export interface ProjectListItem {
   enabled: boolean;
   lastIngestedAt: Date | null;
   sourceType: string;
+  surfaces: string[];
+  status: string;
+  featured: boolean;
   metadata: unknown;
   counts: ProjectCounts;
 }
@@ -37,10 +40,12 @@ export class ProjectsService {
 
   async list(
     search: string | undefined,
+    surface: string | undefined,
+    featured: boolean | undefined,
     page: number,
     pageSize: number,
   ): Promise<Paginated<ProjectListItem[]>> {
-    const { items, total } = await this.repository.list({ search, page, pageSize });
+    const { items, total } = await this.repository.list({ search, surface, featured, page, pageSize });
     const counts = await this.repository.countsByProject(items.map((p) => p.slug));
     const data = items.map((project) => ({
       slug: project.slug,
@@ -52,6 +57,9 @@ export class ProjectsService {
       enabled: project.enabled,
       lastIngestedAt: project.lastIngestedAt,
       sourceType: project.sourceType,
+      surfaces: project.surfaces,
+      status: project.status,
+      featured: project.featured,
       metadata: project.metadata,
       counts: counts.get(project.slug) ?? { documents: 0, chunks: 0, decisions: 0 },
     }));

@@ -14,6 +14,10 @@ export interface VectorSearchFilters {
   projectSlug?: string;
   categories?: string[];
   docType?: string;
+  /** Restrict to a specific contentKind (e.g. "blog-post"). */
+  contentKind?: string;
+  /** When false (default), draft documents are never returned. */
+  includeDrafts?: boolean;
   minScore?: number;
   topK: number;
 }
@@ -79,6 +83,14 @@ function filterSql(
     params.push(filters.docType);
     clauses.push(`d."docType" = $${i}`);
     i += 1;
+  }
+  if (filters.contentKind) {
+    params.push(filters.contentKind);
+    clauses.push(`d."contentKind" = $${i}`);
+    i += 1;
+  }
+  if (!filters.includeDrafts) {
+    clauses.push(`d."isDraft" = false`);
   }
   let minScoreClause = '';
   if (filters.minScore !== undefined) {

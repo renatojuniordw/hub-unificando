@@ -18,6 +18,7 @@ export class SearchController {
       projectSlug: query.project,
       category: query.category,
       docType: query.docType,
+      contentKind: query.contentKind,
       limit: query.pageSize,
       skip: (query.page - 1) * query.pageSize,
       strategy: query.strategy,

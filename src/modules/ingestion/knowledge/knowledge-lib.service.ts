@@ -61,6 +61,9 @@ export class KnowledgeLibService {
     const projects = await this.prisma.project.findMany({
       where: {
         enabled: true,
+        // Manual registry entries (case studies, clients) have no source
+        // folder — nothing to mirror.
+        sourceType: { not: 'manual' },
         ...(projectSlugs && projectSlugs.length > 0 ? { slug: { in: projectSlugs } } : {}),
       },
       orderBy: { name: 'asc' },

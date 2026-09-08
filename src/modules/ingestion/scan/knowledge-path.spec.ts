@@ -47,9 +47,18 @@ describe('isKnowledgePath (curated knowledge scope)', () => {
     expect(isKnowledgePath('public/llms.txt')).toBe(false);
   });
 
+  it('includes blog posts under src/content/blog (single content/ exception)', () => {
+    expect(isKnowledgePath('src/content/blog/mcp-gupy.md')).toBe(true);
+    expect(isKnowledgePath('src/content/blog/aws/outro.md')).toBe(false); // nested beyond blog
+    expect(isKnowledgePath('src/content/outra-coisa.md')).toBe(false);
+    expect(isKnowledgePath('src/lib/foo.md')).toBe(false);
+    expect(isKnowledgePath('src/content/blog/draft.md')).toBe(true); // drafts still scanned; orchestrator decides
+  });
+
   it('normalizes Windows separators', () => {
     expect(isKnowledgePath('docs\\a.md')).toBe(true);
     expect(isKnowledgePath('docs\\sub\\x.txt')).toBe(true);
+    expect(isKnowledgePath('src\\content\\blog\\post.md')).toBe(true);
   });
 
   it('rejects empty and weird paths', () => {

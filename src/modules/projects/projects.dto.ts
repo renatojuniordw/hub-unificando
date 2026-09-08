@@ -8,6 +8,19 @@ export class ListProjectsDto extends PaginationDto {
   @IsString()
   @MaxLength(200)
   search?: string;
+
+  @ApiPropertyOptional({
+    description: 'Display surface: unificando | portfolio | internal (docs/CONTENT.md)',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(30)
+  surface?: string;
+
+  @ApiPropertyOptional({ description: 'Only featured projects (home highlights)' })
+  @IsOptional()
+  @IsString()
+  featured?: string;
 }
 
 export class ProjectParamsDto {

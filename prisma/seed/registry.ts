@@ -22,8 +22,12 @@ export interface ProjectSeed {
   folderPath: string;
   stack: StackEntry[];
   tags: string[];
-  sourceType: 'local' | 'git';
+  sourceType: 'local' | 'git' | 'manual';
   enabled?: boolean;
+  /** Display surfaces (see docs/CONTENT.md): "unificando" | "portfolio" | "internal". */
+  surfaces?: string[];
+  status?: 'live' | 'beta' | 'alpha' | 'maintenance';
+  featured?: boolean;
   metadata?: Record<string, unknown>;
 }
 
@@ -182,4 +186,157 @@ export const REGISTRY_SEEDS: ProjectSeed[] = [
     sourceType: 'local',
     metadata: { kind: 'cli-package' },
   },
+  // -------------------------------------------------------------------------
+  // Multi-surface additions (docs/CONTENT.md, ADR 0011):
+  //  * the 6 ingested "lab" entries above get display surfaces
+  //  * portfolio-ui (blog/docs, internal surface — ingested from folderPath)
+  //  * 13 manual registry entries mirroring portfolio-ui case studies
+  //    (sourceType "manual" → never scanned, display-only).
+  // -------------------------------------------------------------------------
+  {
+    slug: 'portfolio-ui',
+    name: 'Portfolio Renato Bezerra',
+    description:
+      'Personal/career portfolio (Next.js 16 standalone): blog posts (10) and 13 case studies ' +
+      'of Unificando + client work. The blog is ingested as knowledge; case studies are ' +
+      'registered manually (see registry entries with sourceType "manual").',
+    repoUrl: 'git@github.com:renatojuniordw/portfolio-ui.git',
+    folderPath: '/Users/renatobezerra/Developer/portfolio-ui',
+    stack: [
+      { name: 'next', version: '16.1.6', role: 'framework' },
+      { name: 'react', version: '19.2.3', role: 'framework' },
+      { name: 'gray-matter', version: '4.0.3', role: 'data' },
+      { name: 'react-markdown', version: '*', role: 'ui' },
+      { name: 'vitest', version: '*', role: 'dev' },
+    ],
+    tags: ['portfolio', 'next', 'blog', 'static', 'personal'],
+    sourceType: 'local',
+    surfaces: ['internal'],
+    status: 'live',
+    metadata: { kind: 'web', port: 3100, blogPosts: 10 },
+  },
+  // --- Personal / client case studies (sourceType manual, display-only) ---
+  {
+    slug: 'unificando-automacao',
+    name: 'Unificando Automação',
+    description: 'Marketing site of Unificando as an automation agency (Automação).',
+    repoUrl: null,
+    folderPath: '',
+    stack: [],
+    tags: ['automation', 'ecosystem', 'marketing'],
+    sourceType: 'manual',
+    surfaces: ['unificando', 'portfolio'],
+    metadata: { kind: 'client-site' },
+  },
+  {
+    slug: 'unificando-vitrine',
+    name: 'Unificando — Vitrine',
+    description: 'Vitrine/landing of the Unificando lab projects (institutional).',
+    repoUrl: null,
+    folderPath: '',
+    stack: [],
+    tags: ['ecosystem', 'vitrine', 'marketing'],
+    sourceType: 'manual',
+    surfaces: ['unificando', 'portfolio'],
+    metadata: { kind: 'client-site' },
+  },
+  {
+    slug: 'mariaclarasantos',
+    name: 'Maria Clara Santos',
+    description: "High-conversion professional website for a lawyer (Freelance / Institucional).",
+    repoUrl: 'git@github.com:renatojuniordw/portfolio-maria-clara.git',
+    folderPath: '',
+    stack: [],
+    tags: ['freelance', 'website', 'client'],
+    sourceType: 'manual',
+    surfaces: ['portfolio'],
+    metadata: { kind: 'client-site', liveUrl: 'https://mariaclarasantos.adv.br/' },
+  },
+  {
+    slug: 'seu-barraco-esperto',
+    name: 'Seu Barraco Esperto',
+    description: 'Practical, accessible home automation (IoT & Automação Residencial).',
+    repoUrl: null,
+    folderPath: '',
+    stack: [],
+    tags: ['iot', 'automation', 'client'],
+    sourceType: 'manual',
+    surfaces: ['portfolio'],
+    metadata: { kind: 'client-project' },
+  },
+  {
+    slug: 'oferticando',
+    name: 'Oferticando: Ofertas & Cupons',
+    description: 'High-performance frontend for an offers & coupons platform (E-commerce / Afiliados).',
+    repoUrl: null,
+    folderPath: '',
+    stack: [],
+    tags: ['e-commerce', 'frontend', 'client'],
+    sourceType: 'manual',
+    surfaces: ['portfolio'],
+    metadata: { kind: 'client-project' },
+  },
+  {
+    slug: 'ariano-suassuna',
+    name: 'Ariano Suassuna: Tributo',
+    description: 'Educational/collaborative website honoring Ariano Suassuna (Educacional / Cultura).',
+    repoUrl: 'git@github.com:renatojuniordw/ui-ariano-suassuna.git',
+    folderPath: '',
+    stack: [],
+    tags: ['educational', 'culture', 'client'],
+    sourceType: 'manual',
+    surfaces: ['portfolio'],
+    metadata: { kind: 'client-site', liveUrl: 'https://ariano-suassuna.unificando.com.br/' },
+  },
+  {
+    slug: 'sheik',
+    name: 'Diego Sheik: Mídia Kit',
+    description: 'Interactive media kit for content creator Diego Sheik (Mídia & Influência).',
+    repoUrl: 'git@github.com:renatojuniordw/sheik-mediakit.git',
+    folderPath: '',
+    stack: [],
+    tags: ['media-kit', 'influencer', 'client'],
+    sourceType: 'manual',
+    surfaces: ['portfolio'],
+    metadata: { kind: 'client-site', liveUrl: 'https://sheik.unificando.com.br/' },
+  },
+  {
+    slug: 'sistema-18ia',
+    name: 'Sistema 18IA',
+    description: 'High-conversion landing page for a digital product (Produto Digital / CRO).',
+    repoUrl: null,
+    folderPath: '',
+    stack: [],
+    tags: ['landing', 'cro', 'client'],
+    sourceType: 'manual',
+    surfaces: ['portfolio'],
+    metadata: { kind: 'client-site', liveUrl: 'https://18ia.meucria.com.br/' },
+  },
 ];
+
+/** Slugs of the lab entries that also appear on the portfolio surface. */
+const PORTFOLIO_LAB_SLUGS = new Set([
+  'radar-unificando',
+  'pdf-unificando',
+  'med-unificando',
+  'prompts-unificando',
+  'promptcraft-unificando',
+]);
+
+/** Home highlights on the portfolio/landing (pdf, med, radar). */
+const FEATURED_SLUGS = new Set(['pdf-unificando', 'med-unificando', 'radar-unificando']);
+
+/** Injects display surfaces/status/featured into the registry seeds. */
+export function applySurfaces(seeds: ProjectSeed[]): ProjectSeed[] {
+  return seeds.map((seed) => {
+    if (seed.surfaces) return seed; // manual + portfolio-ui already set
+    if (PORTFOLIO_LAB_SLUGS.has(seed.slug)) {
+      return { ...seed, surfaces: ['unificando', 'portfolio'], featured: FEATURED_SLUGS.has(seed.slug) };
+    }
+    // Remaining lab entries (internal tools, e.g. radar extension) show on the
+    // unificando surface only.
+    return { ...seed, surfaces: ['unificando'] };
+  });
+}
+
+export const FINAL_REGISTRY_SEEDS: ProjectSeed[] = applySurfaces(REGISTRY_SEEDS);

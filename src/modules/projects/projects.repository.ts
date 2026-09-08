@@ -17,6 +17,8 @@ interface DecisionCountRow {
 
 export interface ProjectListQuery {
   search?: string;
+  surface?: string;
+  featured?: boolean;
   page: number;
   pageSize: number;
 }
@@ -32,17 +34,27 @@ export class ProjectsRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   async list(query: ProjectListQuery): Promise<ProjectListResult> {
-    const where =
-      query.search != null && query.search.length > 0
-        ? {
-            OR: [
-              { name: { contains: query.search, mode: 'insensitive' as const } },
-              { description: { contains: query.search, mode: 'insensitive' as const } },
-              { slug: { contains: query.search, mode: 'insensitive' as const } },
-              { tags: { has: query.search } },
-            ],
-          }
-        : undefined;
+    const clauses: Array<Record<string, unknown>> = [];
+    if (query.search != null && query.search.length > 0) {
+      clauses.push({
+        OR: [
+          { name: { contains: query.search, mode: 'insensitive' as const } },
+          { description: { contains: query.search, mode: 'insensitive' as const } },
+          { slug: { contains: query.search, mode: 'insensitive' as const } },
+          { tags: { has: query.search } },
+        ],
+      });
+    }
+    if (query.surface) {
+      // "internal" surface is only served for internal tooling; it is never
+      // exposed through the public list unless explicitly requested by an
+      // internal consumer.
+      clauses.push({ surfaces: { has: query.surface } });
+    }
+    if (query.featured === true) {
+      clauses.push({ featured: true });
+    }
+    const where = clauses.length > 0 ? { AND: clauses } : undefined;
     const [items, total] = await this.prisma.$transaction([
       this.prisma.project.findMany({
         where,

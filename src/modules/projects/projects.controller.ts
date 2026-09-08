@@ -13,7 +13,13 @@ export class ProjectsController {
     summary: 'Project registry (slug, name, description, repo, stack, tags, counts)',
   })
   list(@Query() query: ListProjectsDto) {
-    return this.projectsService.list(query.search, query.page, query.pageSize);
+    return this.projectsService.list(
+      query.search,
+      query.surface,
+      query.featured === 'true',
+      query.page,
+      query.pageSize,
+    );
   }
 
   @Get(':slug')

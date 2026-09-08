@@ -9,8 +9,18 @@ import { ClassifierService } from '../../classification/classifier.service';
 import { applyPathSpecialization } from '../../classification/path-specialization';
 import { ChunkService } from '../chunking/chunk.service';
 import { detectLanguage } from '../parsing/sections';
+import { parseFrontmatter } from '../parsing/frontmatter';
 import { resolveKnowledgeLibRoot, resolveProjectRoot } from '../scan/project-source';
 import { ScannerService, type ScannedFile } from '../scan/scanner.service';
+
+/** Parses a blog frontmatter `date` (YYYY-MM-DD or full ISO); null when invalid. */
+function parseBlogDate(raw: string): Date | null {
+  const date = new Date(raw);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+const isBlogRelativePath = (path: string): boolean =>
+  path.startsWith('src/content/blog/') && path.replace(/\\/g, '/').split('/').length === 4;
 import {
   IngestionWriteRepository,
   sha256,
@@ -39,15 +49,18 @@ export class IngestionOrchestrator {
 
   async ingest(scope: IngestionScope, options: IngestOptions = {}): Promise<IngestStats> {
     const projects = await this.prisma.project.findMany({
+      // Manual registry entries (portfolio case studies, clients) have no
+      // filesystem folder — they are display-only and never ingested.
       where: { enabled: true, ...(scope.projectSlug ? { slug: scope.projectSlug } : {}) },
       orderBy: { name: 'asc' },
     });
+    const projectsToIngest = projects.filter((project) => project.sourceType !== 'manual');
     if (scope.projectSlug && projects.length === 0) {
       throw new NotFoundException(`Project "${scope.projectSlug}" not found or disabled`);
     }
 
     const stats: IngestStats = {
-      projects: projects.length,
+      projects: projectsToIngest.length,
       documents: 0,
       chunks: 0,
       embeddedChunks: 0,
@@ -56,7 +69,7 @@ export class IngestionOrchestrator {
       errorsByPath: [],
     };
 
-    for (const project of projects) {
+    for (const project of projectsToIngest) {
       const projectStats = await this.ingestProject(project, options);
       stats.documents += projectStats.documents;
       stats.chunks += projectStats.chunks;
@@ -154,6 +167,27 @@ export class IngestionOrchestrator {
     }
   }
 
+  /**
+   * Removes a previously-published blog document whose file is no longer a
+   * publishable post (became a draft, lost title/date frontmatter, or has an
+   * unparseable date) — the draft/sketch must stop being served.
+   */
+  private async purgeUnpublishableBlogFile(
+    projectSlug: string,
+    path: string,
+    options: IngestOptions,
+  ): Promise<void> {
+    if (options.dryRun) return;
+    const existing = await this.prisma.document.findUnique({
+      where: { projectSlug_path: { projectSlug, path } },
+      select: { id: true, contentKind: true },
+    });
+    if (existing && existing.contentKind === 'blog-post') {
+      await this.prisma.document.deleteMany({ where: { projectSlug, path } });
+      this.logger.log(`Removed unpublishable blog document "${projectSlug}/${path}"`);
+    }
+  }
+
   private async ingestFile(
     project: Project,
     file: ScannedFile,
@@ -205,7 +239,28 @@ export class IngestionOrchestrator {
     const summary = chunks[0]?.content.slice(0, 400) ?? '';
     const docType = mode;
     const named = basename(file.relativePath);
-    const contentKind = named.startsWith('README')
+
+    // Blog posts (portfolio-ui `src/content/blog/*.md`) carry their own title,
+    // date, tags and reading time in frontmatter. A file that is not a real
+    // post (no title+date) is skipped entirely — drafts are never embedded.
+    // A published post that becomes a draft stops being exposed: the existing
+    // document is removed (see purgeUnpublishableBlogFile).
+    const isBlogPath = isBlogRelativePath(file.relativePath);
+    const frontmatter = isBlogPath ? parseFrontmatter(file.content) : null;
+    const isBlogPost = frontmatter?.hasFrontmatter === true && isBlogPath;
+
+    // Non-post or draft blog files are never indexed; any previously published
+    // document for this path is removed so the draft/sketch stops being served.
+    if (isBlogPath && (!isBlogPost || frontmatter?.draft === true || !frontmatter?.date)) {
+      await this.purgeUnpublishableBlogFile(project.slug, file.relativePath, options);
+      this.logger.log(
+        `Skipping "${file.relativePath}": ${isBlogPost ? 'draft' : 'no title+date frontmatter'} post (never embedded/exposed)`,
+      );
+      stats.skipped += 1;
+      return;
+    }
+
+    let contentKind = named.startsWith('README')
       ? 'README'
       : /^(CLAUDE|AGENTS)\.md$/.test(named)
         ? 'AGENT-GUIDE'
@@ -214,25 +269,42 @@ export class IngestionOrchestrator {
           : mode === 'markdown'
             ? 'MARKDOWN'
             : 'TEXT';
+    if (isBlogPost) contentKind = 'blog-post';
+
+    const publishedAt = isBlogPost && frontmatter?.date ? parseBlogDate(frontmatter.date) : null;
+    if (isBlogPost && publishedAt === null) {
+      this.logger.warn(`Skipping "${file.relativePath}": blog post date is not parseable`);
+      stats.skipped += 1;
+      return;
+    }
+    const isDraft = false; // drafts already skipped above
 
     const metadata = {
       headings: chunks
         .map((chunk) => chunk.heading)
         .filter((h): h is string => Boolean(h))
         .slice(0, 10),
+      ...(isBlogPost && frontmatter?.readingTime ? { readingTime: frontmatter.readingTime } : {}),
       ...(pathRule?.metadata ?? {}),
     };
 
     const draft: DocumentDraft = {
       projectSlug: project.slug,
       path: file.relativePath,
-      title,
-      summary,
+      title: isBlogPost && frontmatter?.title ? frontmatter.title : title,
+      summary: isBlogPost && frontmatter?.description ? frontmatter.description : summary,
       lang: detectLanguage(file.content),
+      // Category follows the normal classifier; blog-ness is carried by
+      // contentKind="blog-post" (the canonical signal for filters/endpoints).
       category,
-      categories,
+      categories: isBlogPost
+        ? Array.from(new Set([...categories, ...(frontmatter?.tags ?? [])]))
+        : categories,
       docType,
       contentKind,
+      tags: frontmatter?.tags ?? [],
+      publishedAt,
+      isDraft,
       sourceSha,
       charCount: file.content.length,
       tokenEstimate: Math.ceil(file.content.length / 4),

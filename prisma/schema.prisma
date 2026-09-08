@@ -26,8 +26,12 @@ model Project {
   folderPath     String // absolute, or relative to the scan root
   stack          Json? // [{ name, version, role }] — derived from package.json
   tags           String[]
-  sourceType     String @default("local") // "local" | "git"
+  sourceType     String    @default("local") // "local" | "git" | "manual"
   enabled        Boolean   @default(true)
+  // Display surfaces (see docs/CONTENT.md): which frontends show this project.
+  surfaces       String[] // "unificando" | "portfolio" | "internal" (combos allowed)
+  status         String    @default("live") // "live" | "beta" | "alpha" | "maintenance"
+  featured       Boolean   @default(false) // home highlight (ui-unificando)
   lastIngestedAt DateTime?
   metadata       Json?
   createdAt      DateTime  @default(now())
@@ -42,36 +46,40 @@ model Project {
 // A single indexed knowledge file (markdown, txt, ...). Text lives in chunks;
 // the document row carries the title/summary/categories pointing at them.
 model Document {
-  id            String   @id @default(cuid())
+  id            String    @id @default(cuid())
   projectSlug   String
-  project       Project  @relation(fields: [projectSlug], references: [slug], onDelete: Cascade)
+  project       Project   @relation(fields: [projectSlug], references: [slug], onDelete: Cascade)
   path          String // path relative to the project folder (ex: docs/design-system.md)
   title         String
   summary       String?
   lang          String? // "pt-BR", "en", ...
   category      String // primary category slug
   categories    String[] // multi-label
-  docType       String @default("markdown") // "markdown" | "txt" | "json" | "code" | ...
-  contentKind   String? // DESIGN_SYSTEM, ARCHITECTURE, API, README, PROMPT, ...
+  docType       String    @default("markdown") // "markdown" | "txt" | "json" | "code" | ...
+  contentKind   String? // DESIGN_SYSTEM, ARCHITECTURE, API, README, PROMPT, MARKDOWN, TEXT, blog-post
+  tags          String[] // topic tags (e.g. blog frontmatter tags)
+  publishedAt   DateTime? // blog posts: frontmatter date
+  isDraft       Boolean   @default(false) // blog drafts never embedded/exposed
   sourceSha     String // sha256 of the file content (dedupe)
   charCount     Int
   tokenEstimate Int?
   metadata      Json?
-  ingestedAt    DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  ingestedAt    DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   chunks Chunk[]
 
   @@unique([projectSlug, path])
   @@index([projectSlug, category])
+  @@index([contentKind, isDraft])
   @@map("documents")
 }
 
 // A searchable piece of a document (markdown-heading-aware chunks).
 model Chunk {
-  id          String   @id @default(cuid())
+  id          String                      @id @default(cuid())
   documentId  String
-  document    Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  document    Document                    @relation(fields: [documentId], references: [id], onDelete: Cascade)
   index       Int // order within the document
   heading     String? // heading lineage, ex: "## Arquitetura > ### Módulos"
   content     String
@@ -90,14 +98,14 @@ model Chunk {
 // deterministic rule pass, prototype is the embedding of an anchor text used
 // by the semantic pass (see docs/CLASSIFICATION.md).
 model Category {
-  slug        String   @id
+  slug        String                      @id
   name        String
   description String
   keywords    String[] // deterministic rules
   prototype   Unsupported("vector(768)")? // embedding of the category anchor text
   parentSlug  String?
   metadata    Json?
-  createdAt   DateTime @default(now())
+  createdAt   DateTime                    @default(now())
 
   @@index([parentSlug])
   @@map("categories")
@@ -110,7 +118,7 @@ model Decision {
   project     Project  @relation(fields: [projectSlug], references: [slug], onDelete: Cascade)
   title       String
   date        DateTime @default(now())
-  status      String @default("accepted") // "accepted" | "superseded" | "proposed"
+  status      String   @default("accepted") // "accepted" | "superseded" | "proposed"
   summary     String
   content     String // full markdown of the ADR (when a file exists)
   sourcePath  String? // ex: docs/decisions/001-fila.md
@@ -124,15 +132,15 @@ model Decision {
 
 // Bookkeeping of ingestion jobs (also enqueued in BullMQ/Redis).
 model IngestionJob {
-  id         String   @id @default(cuid())
+  id         String    @id @default(cuid())
   kind       String // "scan" | "ingest" | "reindex" | "classify"
-  status     String @default("queued") // "queued" | "running" | "done" | "failed" | "partial"
+  status     String    @default("queued") // "queued" | "running" | "done" | "failed" | "partial"
   scope      Json? // { projectSlug?, path?, strategy? }
   stats      Json? // { projects, documents, chunks, errors }
   error      String?
   startedAt  DateTime?
   finishedAt DateTime?
-  createdAt  DateTime @default(now())
+  createdAt  DateTime  @default(now())
 
   @@index([status, createdAt])
   @@map("ingestion_jobs")

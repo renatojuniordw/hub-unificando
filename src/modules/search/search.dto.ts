@@ -35,6 +35,11 @@ export class SearchQueryDto {
   @IsString()
   docType?: string;
 
+  @ApiPropertyOptional({ description: 'Restrict to a content kind (e.g. blog-post)' })
+  @IsOptional()
+  @IsString()
+  contentKind?: string;
+
   @ApiPropertyOptional({ default: 1, minimum: 1 })
   @IsOptional()
   @Type(() => Number)

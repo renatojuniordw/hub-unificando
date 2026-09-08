@@ -18,6 +18,7 @@ export interface SearchInput {
   projectSlug?: string;
   category?: string;
   docType?: string;
+  contentKind?: string;
   /** Max results to return (REST pageSize; MCP topK; CLI --top). */
   limit: number;
   /** Pagination offset for REST (page-1)*pageSize. */
@@ -100,6 +101,7 @@ export class SearchService {
       projectSlug: query.projectSlug,
       categories: query.category ? [query.category] : undefined,
       docType: query.docType,
+      contentKind: query.contentKind,
       topK: FUSION_TOP_K,
     };
 
@@ -182,6 +184,7 @@ export class SearchService {
       query.projectSlug ?? '',
       query.category ?? '',
       query.docType ?? '',
+      query.contentKind ?? '',
       String(query.limit),
       String(query.skip ?? 0),
       query.strategy ?? 'balanced',
