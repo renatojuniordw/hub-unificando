@@ -52,10 +52,10 @@ classification.
 | `category` | String | primary category slug |
 | `categories` | String[] | multi-label (up to 3) |
 | `docType` | String | default `"markdown"` (`markdown` \| `txt`) |
-| `contentKind` | String? | `README`, `AGENT-GUIDE`, `MARKDOWN`, `TEXT` |
+| `contentKind` | String? | `README`, `AGENT-GUIDE`, `PROMPT`, `MARKDOWN`, `TEXT` |
 | `sourceSha` | String | sha256 of file — **dedupe key** |
 | `charCount` / `tokenEstimate` | Int / Int? | `ceil(chars / 4)` estimate |
-| `metadata` | Json? | e.g. first 10 chunk headings |
+| `metadata` | Json? | first 10 chunk headings + path-rule extras (`promptId` for `prompts/*.md`, `workspace` for radar) |
 | `ingestedAt` / `updatedAt` | DateTime | |
 
 Indexes/constraints:

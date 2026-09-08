@@ -98,4 +98,7 @@ Global modules: `EnvModule`, `PrismaModule`, `RedisModule`.
 `folderPath` (fixtures) → knowledge lib commitada `knowledge/<slug>`
 (`KNOWLEDGE_LIB_ROOT`, default `knowledge` relativo à raiz do repo) →
 `HUB_SCAN_ROOT/<folderPath>` como fallback dev. A lib é o espelho commitado
-por slug dos arquivos de conhecimento de cada projeto — ver ADR 0009.
+por slug dos arquivos de conhecimento de cada projeto — ver ADR 0009. Para
+projetos cujos prompts vivem como constantes TS (radar-unificando), o
+`hub sync-docs` extrai o texto para `knowledge/<slug>/prompts/*.md`
+(`PromptExtractorService`, AST sem executar código) — ver ADR 0010.

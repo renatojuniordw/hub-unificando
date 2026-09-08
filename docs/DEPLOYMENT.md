@@ -85,7 +85,8 @@ downloaded (cached in the `transformers-cache` volume).
 ## Production / VPS (`docker-compose.prod.yml`)
 
 The Hub is **autonomous**: no sibling repositories, no uploaded artifacts. All
-knowledge travels inside the image (`knowledge/` committed docs → copied into
+knowledge travels inside the image (`knowledge/` committed docs — including
+the prompts extracted from TS sources, ADR 0010 → copied into
 `/app/knowledge`). Updating the index = push a commit that updates
 `knowledge/`, then rebuild:
 

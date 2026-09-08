@@ -28,6 +28,20 @@ EmbeddingProvider overridden** by mocks:
   fallback) plus pure `rulePass` and `cosineSimilarity` cases. It overrides
   `PrismaService.category.findMany` and `$queryRawUnsafe` with jest mocks and
   swaps the embedding provider for a fake returning fixed vectors.
+- `src/modules/ingestion/scan/knowledge-path.spec.ts` — curated knowledge
+  scope: README/CLAUDE/AGENTS at the root, `docs/` at any depth, root
+  `prompts/`, extension filtering, Windows separators (ADR 0009).
+- `src/modules/ingestion/scan/project-source.spec.ts` — three-layer source
+  resolution (absolute → knowledge lib → scan root) with real tmpdir
+  folders.
+- `src/modules/ingestion/knowledge/prompt-extractor.service.spec.ts` — TS
+  prompt extraction via AST: escaped backticks, `securityRules({...})`
+  resolved (output pinned to the sibling helper), multiple consts per file,
+  `@deprecated` notes, unknown interpolation fails loudly (ADR 0010).
+- `src/modules/ingestion/knowledge/knowledge-lib.service.spec.ts` — lib
+  mirror against mocked Prisma + tmpdir: scanned ∪ generated live set,
+  pruning of stale files, dry-run, skip-without-pruning on missing source or
+  failed extraction.
 
 Run: `npm run test` (watch: `npm run test:watch`, coverage: `npm run test:cov`).
 

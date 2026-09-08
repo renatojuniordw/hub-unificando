@@ -22,11 +22,12 @@ Decisão (usuário): indexar apenas **documentação de verdade**:
 - `prompts/` — bibliotecas de prompts (`prompts-unificando`,
   `promptcraft-unificando`) — o conteúdo delas é a pasta `prompts/`.
 
-Resultado esperado: **~80 arquivos** curados por projeto:
-ui 9 · med 13 · pdf 14 · radar-app 17 · radar-ext 6 · prompts-unificando 14 ·
-promptcraft 7.
+Resultado esperado: **~90 arquivos** curados no total (inclui os 10 prompts
+extraídos do radar — ADR 0010):
+ui 9 · med 13 · pdf 14 · radar-app 27 (17 docs + 10 prompts extraídos) ·
+radar-ext 6 · prompts-unificando 14 · promptcraft 7.
 
-Isso também deixa a knowledge lib (deploy VPS) com ~80 arquivos.
+Isso também deixa a knowledge lib (deploy VPS) com ~90 arquivos.
 
 ## Mudanças implementadas
 
@@ -80,10 +81,11 @@ real via `pruneStaleDocuments`, que já existia.)*
 ## Verificação
 
 1. `npm run test`, `npm run build`, `npm run lint` — verdes.
-2. `npm run hub -- sync-docs --dry-run` → 7 projetos, 80 arquivos.
-3. `npm run hub -- sync-docs` → gera `knowledge/<slug>/` (80 arquivos).
+2. `npm run hub -- sync-docs --dry-run` → 7 projetos, ~90 arquivos.
+3. `npm run hub -- sync-docs` → gera `knowledge/<slug>/` (~90 arquivos,
+   incluindo os prompts extraídos do radar).
 4. `npm run hub -- ingest` → converge (purga órfãos do escopo antigo);
-   `hub status` ≈ 80 docs / ~400 chunks.
+   `hub status` ≈ 90 docs / ~540 chunks.
 5. Simulação VPS só com a lib:
    `HUB_SCAN_ROOT=/tmp/empty KNOWLEDGE_LIB_ROOT=<repo>/knowledge node
    dist/src/cli.js ingest`.

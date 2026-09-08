@@ -44,15 +44,16 @@ npm run build                 # necessário: CLI/seed-categories/MCP stdio rodam
 # 3. protótipos das categorias + sincronizar a knowledge lib + ingestão
 npm run hub -- seed-categories  # embeddings dos protótipos (1ª vez baixa o modelo)
 npm run hub -- sync-docs        # espelha os irmãos (HUB_SCAN_ROOT) em knowledge/<slug>; commite o resultado
-npm run hub -- ingest           # lê da lib: ~80 docs curados / ~400 chunks
+npm run hub -- ingest           # lê da lib: ~90 docs curados / ~540 chunks
 ```
 
 A **knowledge lib** (`knowledge/<slug>`, um folder por repositório) é o espelho
 commitado dos arquivos de conhecimento de cada projeto — `docs/` +
-README/CLAUDE/AGENTS na raiz + `prompts/`. É o que torna o Hub **autônomo**:
-`git clone` + `hub ingest` reconstroem o índice em qualquer lugar (VPS
-inclusive), sem depender dos repositórios irmãos. Em dev, rode `hub sync-docs`
-quando os irmãos mudarem e commite o diff.
+README/CLAUDE/AGENTS na raiz + `prompts/` (incluindo os prompts extraídos de
+código TS, como os do radar-unificando — ADR 0010). É o que torna o Hub
+**autônomo**: `git clone` + `hub ingest` reconstroem o índice em qualquer
+lugar (VPS inclusive), sem depender dos repositórios irmãos. Em dev, rode
+`hub sync-docs` quando os irmãos mudarem e commite o diff.
 
 Rodar o servidor:
 
@@ -110,7 +111,7 @@ prisma/
   schema.prisma          # data model (projetos/doc/chunks/categorias/decisões)
   migrations/            # inclui índices HNSW/GIN/pg_trgm
   seed.ts                # categorias + registry
-knowledge/               # lib commitada: docs dos 7 projetos (gerada por `hub sync-docs`)
+knowledge/               # lib commitada: docs + prompts dos 7 projetos (gerada por `hub sync-docs`)
 docs/                    # documentação técnica + ADRs
 ```
 
