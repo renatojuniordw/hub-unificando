@@ -9,10 +9,13 @@ import {
   type ProjectSourceKind,
 } from '../scan/project-source';
 import { ScannerService } from '../scan/scanner.service';
+import { PromptExtractorService, type GeneratedPromptFile } from './prompt-extractor.service';
 
 export interface KnowledgeLibSyncResult {
   projects: number;
   filesCopied: number;
+  /** Prompt .md files generated from TS sources (ADR 0010). */
+  filesGenerated: number;
   filesRemoved: number;
   bytes: number;
   /** Per-project resolved source root (kind + path) used for the mirror. */
@@ -40,6 +43,7 @@ export class KnowledgeLibService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly scanner: ScannerService,
+    private readonly promptExtractor: PromptExtractorService,
     @Inject(ENV) private readonly env: Env,
   ) {}
 
@@ -69,6 +73,7 @@ export class KnowledgeLibService {
     const result: KnowledgeLibSyncResult = {
       projects: 0,
       filesCopied: 0,
+      filesGenerated: 0,
       filesRemoved: 0,
       bytes: 0,
       roots: {},
@@ -98,36 +103,73 @@ export class KnowledgeLibService {
       }
 
       const scanned = await this.scanner.scanFolder(source.path);
+
+      // Prompts embedded in TS sources (ADR 0010) become generated .md files
+      // under prompts/. Extraction failure skips the project without pruning
+      // — a broken source must never shrink the lib.
+      let generated: GeneratedPromptFile[] = [];
+      try {
+        generated = await this.promptExtractor.extractPrompts(project.slug, source.path);
+      } catch (error) {
+        this.logger.warn(
+          `sync-docs: prompt extraction failed for "${project.slug}" — skipping project (no pruning): ` +
+            (error instanceof Error ? error.message : 'error'),
+        );
+        continue;
+      }
+      const scannedByPath = new Map(scanned.map((file) => [file.relativePath, file]));
+      for (const file of generated) {
+        if (scannedByPath.has(file.relativePath)) {
+          this.logger.warn(
+            `sync-docs: generated "${file.relativePath}" collides with a scanned file (scanned wins)`,
+          );
+        }
+      }
+      const generatedOnly = generated.filter((file) => !scannedByPath.has(file.relativePath));
+
       const destRoot = join(knowledgeLibRoot, project.slug);
-      const livePaths = new Set(scanned.map((file) => file.relativePath));
-      const copied = dryRun ? 0 : await this.writeMirror(scanned, destRoot);
+      const livePaths = new Set([
+        ...scanned.map((file) => file.relativePath),
+        ...generatedOnly.map((file) => file.relativePath),
+      ]);
+      const mirrorFiles: ReadonlyArray<{ relativePath: string; content: string }> = [
+        ...scanned,
+        ...generatedOnly.map((file) => ({
+          relativePath: file.relativePath,
+          content: file.content,
+        })),
+      ];
+      const copied = dryRun ? 0 : await this.writeMirror(mirrorFiles, destRoot);
       const removed = dryRun
         ? await this.countPrunable(destRoot, livePaths)
         : await this.pruneMirror(destRoot, livePaths);
-      const bytes = scanned.reduce((total, file) => total + file.size, 0);
+      const bytes =
+        scanned.reduce((total, file) => total + file.size, 0) +
+        generatedOnly.reduce((total, file) => total + file.content.length, 0);
 
       result.projects += 1;
       result.filesCopied += copied;
+      result.filesGenerated += generatedOnly.length;
       result.filesRemoved += removed;
       result.bytes += bytes;
       this.logger.log(
-        `sync-docs${dryRun ? ' (dry-run)' : ''}: "${project.slug}" — ${copied} copied, ${removed} removed, ${scanned.length} files`,
+        `sync-docs${dryRun ? ' (dry-run)' : ''}: "${project.slug}" — ${copied} copied, ${generatedOnly.length} generated, ${removed} removed, ${scanned.length + generatedOnly.length} files`,
       );
     }
 
     this.logger.log(
       `Knowledge lib sync complete (${dryRun ? 'dry-run' : 'written'}): ${result.projects} projects, ` +
-        `${result.filesCopied} files copied, ${result.filesRemoved} files removed, ${result.bytes} bytes -> ${knowledgeLibRoot}`,
+        `${result.filesCopied} files copied, ${result.filesGenerated} prompts generated, ${result.filesRemoved} files removed, ${result.bytes} bytes -> ${knowledgeLibRoot}`,
     );
     return result;
   }
 
   private async writeMirror(
-    scanned: Awaited<ReturnType<ScannerService['scanFolder']>>,
+    files: ReadonlyArray<{ relativePath: string; content: string }>,
     destRoot: string,
   ): Promise<number> {
     let copied = 0;
-    for (const file of scanned) {
+    for (const file of files) {
       const dest = join(destRoot, file.relativePath);
       await mkdir(dirname(dest), { recursive: true });
       await writeFile(dest, file.content, 'utf8');

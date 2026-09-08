@@ -331,7 +331,7 @@ async function main(): Promise<void> {
   program
     .command('sync-docs')
     .description(
-      'Dev: espelha os arquivos indexáveis dos projetos irmãos para a knowledge lib (knowledge/<slug>). Depois rode hub ingest e commite a lib.',
+      'Dev: espelha os arquivos indexáveis dos projetos irmãos para a knowledge lib (knowledge/<slug>), incluindo prompts extraídos de fontes TS mapeadas (ADR 0010). Depois rode hub ingest e commite a lib.',
     )
     .option('--project <slug>', 'sincroniza apenas um projeto')
     .option('--dry-run', 'apenas reporta o que seria copiado/removido, sem escrever')

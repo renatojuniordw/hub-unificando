@@ -60,6 +60,30 @@ name, not the local folder) holds every indexable file of the ecosystem, so
   (`KNOWLEDGE_LIB_ROOT=/app/knowledge`); the entrypoint runs `hub ingest`
   against it on first boot (see `docs/DEPLOYMENT.md`).
 
+### Prompt extraction (TS → md)
+
+Some projects keep product prompts embedded in TypeScript source (template
+literal constants) instead of markdown files — e.g. radar-unificando's
+`src/lib/core/ai/prompts/*.ts`. `PROMPT_EXTRACTION_SOURCES`
+(`prompt-extraction-sources.ts`) maps each slug to those source folders; for
+mapped projects `hub sync-docs` additionally **extracts** every
+`export const *_PROMPT = \`...\`` into a deterministic
+`knowledge/<slug>/prompts/<name>.md` (ADR 0010):
+
+- The TypeScript AST is parsed (never executed); the only supported
+  interpolation is `securityRules({...})` with literal arguments, rendered to
+  its final text by a pinned local mirror. Unknown interpolations fail loudly
+  and skip the whole project without pruning.
+- Generated files carry a header (source file, const, version, deprecated
+  note) and the prompt body; runtime placeholders like `{{RESUME_TEXT}}` stay
+  literal. One `.md` per prompt constant; `*_PROMPT_VERSION` consts are
+  metadata, not prompts.
+- Generated files join the live set: they are written, pruned when the
+  prompt disappears from the source, and counted as `filesGenerated` in the
+  sync result. Projects whose prompts are already `.md` under a root
+  `prompts/` folder (prompts-unificando, promptcraft-unificando) need no
+  mapping — the scanner mirrors them directly.
+
 ## Scanner rules
 
 `src/modules/ingestion/scan/scanner.service.ts`; curated-scope rule in
