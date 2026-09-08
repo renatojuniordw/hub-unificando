@@ -71,7 +71,9 @@ probability or a cosine).
 
 The shared `filterSql` builder adds to all three queries: `projectSlug`
 (`=`), `categories` (array overlap `d.categories && $n::text[]`), `docType`
-(`=`); `minScore` exists at the SQL layer but is not exposed on the REST DTO.
+(`=`), `contentKind` (`=`, e.g. `blog-post`); draft documents
+(`isDraft=true`) are always excluded; `minScore` exists at the SQL layer but
+is not exposed on the REST DTO.
 
 ## Redis cache
 
@@ -95,6 +97,7 @@ search:v1:<q lowercase>|<project?>|<category?>|<docType?>|<limit>|<skip>|<strate
 | `project` | string | optional (project slug; spec §10 uses `project`) |
 | `category` | string | optional (single slug) |
 | `docType` | string | optional |
+| `contentKind` | string | optional (`blog-post`, `PROMPT`, …) |
 | `page` | int | 1-based, default 1 |
 | `pageSize` | int | 1-100, default 20 |
 | `strategy` | enum | `balanced` \| `recall` \| `precision` |

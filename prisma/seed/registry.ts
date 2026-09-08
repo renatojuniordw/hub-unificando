@@ -243,7 +243,7 @@ export const REGISTRY_SEEDS: ProjectSeed[] = [
   {
     slug: 'mariaclarasantos',
     name: 'Maria Clara Santos',
-    description: "High-conversion professional website for a lawyer (Freelance / Institucional).",
+    description: 'High-conversion professional website for a lawyer (Freelance / Institucional).',
     repoUrl: 'git@github.com:renatojuniordw/portfolio-maria-clara.git',
     folderPath: '',
     stack: [],
@@ -267,7 +267,8 @@ export const REGISTRY_SEEDS: ProjectSeed[] = [
   {
     slug: 'oferticando',
     name: 'Oferticando: Ofertas & Cupons',
-    description: 'High-performance frontend for an offers & coupons platform (E-commerce / Afiliados).',
+    description:
+      'High-performance frontend for an offers & coupons platform (E-commerce / Afiliados).',
     repoUrl: null,
     folderPath: '',
     stack: [],
@@ -279,7 +280,8 @@ export const REGISTRY_SEEDS: ProjectSeed[] = [
   {
     slug: 'ariano-suassuna',
     name: 'Ariano Suassuna: Tributo',
-    description: 'Educational/collaborative website honoring Ariano Suassuna (Educacional / Cultura).',
+    description:
+      'Educational/collaborative website honoring Ariano Suassuna (Educacional / Cultura).',
     repoUrl: 'git@github.com:renatojuniordw/ui-ariano-suassuna.git',
     folderPath: '',
     stack: [],
@@ -331,7 +333,11 @@ export function applySurfaces(seeds: ProjectSeed[]): ProjectSeed[] {
   return seeds.map((seed) => {
     if (seed.surfaces) return seed; // manual + portfolio-ui already set
     if (PORTFOLIO_LAB_SLUGS.has(seed.slug)) {
-      return { ...seed, surfaces: ['unificando', 'portfolio'], featured: FEATURED_SLUGS.has(seed.slug) };
+      return {
+        ...seed,
+        surfaces: ['unificando', 'portfolio'],
+        featured: FEATURED_SLUGS.has(seed.slug),
+      };
     }
     // Remaining lab entries (internal tools, e.g. radar extension) show on the
     // unificando surface only.

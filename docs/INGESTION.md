@@ -103,10 +103,12 @@ mapped projects `hub sync-docs` additionally **extracts** every
 - **Curated scope** (`isKnowledgePath` in `knowledge-path.ts`) — a file is
   indexed only when it is real documentation: `README.md`/`CLAUDE.md`/
   `AGENTS.md` at the project root, any file under a `docs`/`documentation`
-  folder at any depth, or `prompts/` at the root — always with a
-  `.md`/`.mdx`/`.txt` extension. Loose `.md` files elsewhere (`notes.md`,
-  `public/llms.txt`, `src/docs.ts`, …) are skipped. A re-run converges the
-  index: `pruneStaleDocuments` deletes documents whose files left the scope.
+  folder at any depth, `prompts/` at the root, or blog posts at
+  `src/content/blog/<slug>.md` (the single content/ exception, portfolio-ui)
+  — always with a `.md`/`.mdx`/`.txt` extension. Loose `.md` files elsewhere
+  (`notes.md`, `public/llms.txt`, `src/docs.ts`, …) are skipped. A re-run
+  converges the index: `pruneStaleDocuments` deletes documents whose files
+  left the scope.
 - Unreadable dirs/files are logged and skipped; relative paths are normalized
   to POSIX separators.
 
@@ -169,7 +171,14 @@ In `ingestFile` (`ingestion-orchestrator.service.ts`):
   (`TOKEN_CHARS_DIVISOR`).
 - `docType` = `markdown` (`.md`/`.mdx`) or `txt`.
 - `contentKind` by name: `README*` → `README`; `CLAUDE.md`/`AGENTS.md` →
-  `AGENT-GUIDE`; `prompts/*.md` → `PROMPT`; else `MARKDOWN`/`TEXT`.
+  `AGENT-GUIDE`; `prompts/*.md` → `PROMPT`; `src/content/blog/<slug>.md` with
+  valid frontmatter → `blog-post`; else `MARKDOWN`/`TEXT`.
+- **Blog posts** (`src/content/blog/`, portfolio-ui): frontmatter
+  (`parsing/frontmatter.ts`) supplies `title`, `summary` (description),
+  `publishedAt` (date), `tags` and `metadata.readingTime`. Files without
+  `title`+`date` or with `draft: true` are skipped and any previously
+  published document for the path is removed (drafts are never embedded or
+  exposed — docs/CONTENT.md).
 - `metadata.headings` = first 10 chunk headings.
 - **Path specialization (§8.2.5)** overrides the classifier primary label:
   `prompts/*.md` → `prompt` + `metadata.promptId`; `CLAUDE.md`/`AGENTS.md` →

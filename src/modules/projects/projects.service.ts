@@ -45,7 +45,13 @@ export class ProjectsService {
     page: number,
     pageSize: number,
   ): Promise<Paginated<ProjectListItem[]>> {
-    const { items, total } = await this.repository.list({ search, surface, featured, page, pageSize });
+    const { items, total } = await this.repository.list({
+      search,
+      surface,
+      featured,
+      page,
+      pageSize,
+    });
     const counts = await this.repository.countsByProject(items.map((p) => p.slug));
     const data = items.map((project) => ({
       slug: project.slug,

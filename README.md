@@ -13,8 +13,9 @@ forma pronta para humanos, agentes e LLMs.
 
 | Área | Como |
 |---|---|
-| Registry de projetos | 7 projetos do ecossistema com stack real, tags e contagens (`GET /api/v1/projects`) |
-| Ingestão | Knowledge lib commitada (`knowledge/<slug>`) → Scanner (escopo curado: docs + README/CLAUDE/AGENTS + prompts) → chunking (800–1500 chars) → classificação → embeddings on-device → pgvector |
+| Registry de projetos | 16 projetos multi-superfície (7 ingeridos + portfolio-ui + 8 case studies manuais) com surfaces/status/featured e counts (`GET /api/v1/projects?surface=portfolio`) |
+| Blog | Posts do portfolio-ui ingeridos como `blog-post` (frontmatter title/date/tags) e servidos por `GET /api/v1/posts` |
+| Ingestão | Knowledge lib commitada (`knowledge/<slug>`) → Scanner (escopo curado: docs + README/CLAUDE/AGENTS + prompts + src/content/blog) → chunking (800–1500 chars) → classificação → embeddings on-device → pgvector |
 | Busca híbrida | Vetorial (HNSW cosine) + keyword (tsvector `portuguese`) + fuzzy (pg_trgm), fundidos por **RRF ponderado** (0.40/0.35/0.25, k=60) |
 | Classificação | 16 categorias; regras determinísticas (keywords) → semântica (protótipos) → fallback `general` |
 | Contexto p/ LLM | Pacotes otimizados por orçamento de tokens (`GET /api/v1/context/export`) |
@@ -124,6 +125,7 @@ docs/                    # documentação técnica + ADRs
 | [docs/MCP.md](docs/MCP.md) | Transportes, 12 tools, segurança, config de clientes |
 | [docs/DATA-MODEL.md](docs/DATA-MODEL.md) | Modelo de dados e índices |
 | [docs/INGESTION.md](docs/INGESTION.md) | Knowledge lib, resolução da fonte e pipeline scanner→chunks→embeddings |
+| [docs/CONTENT.md](docs/CONTENT.md) | Superfícies, registry do portfolio e blog (posts/sync) |
 | [docs/SEARCH.md](docs/SEARCH.md) | Busca híbrida + RRF |
 | [docs/CLASSIFICATION.md](docs/CLASSIFICATION.md) | Taxonomia e classificador |
 | [docs/CONTEXT.md](docs/CONTEXT.md) | Pacotes de contexto para LLM |

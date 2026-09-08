@@ -124,6 +124,90 @@ describe('hub-unificando API (e2e)', () => {
     expect(res.body.success).toBe(false);
     expect(res.body.error.code).toBe('UNAUTHORIZED');
   });
+
+  it('GET /projects?surface=portfolio retorna os 13 case studies do portfolio', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/api/v1/projects?surface=portfolio&pageSize=100')
+      .expect(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.meta.total).toBe(13);
+    const slugs = res.body.data.map((project: { slug: string }) => project.slug);
+    expect(slugs).toContain('mariaclarasantos');
+    expect(slugs).toContain('radar-unificando');
+    expect(slugs).not.toContain('portfolio-ui'); // internal surface
+  });
+
+  it('GET /projects?featured=true retorna os 3 destaques da home', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/api/v1/projects?featured=true')
+      .expect(200);
+    expect(res.body.meta.total).toBe(3);
+    for (const project of res.body.data) {
+      expect(project.featured).toBe(true);
+    }
+  });
+
+  it('GET /projects expõe surfaces/status/featured no item', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/api/v1/projects/portfolio-ui')
+      .expect(200);
+    expect(res.body.data.surfaces).toEqual(['internal']);
+    expect(res.body.data.status).toBe('live');
+  });
+
+  it('GET /posts lista blog posts publicados ordenados por data', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/api/v1/posts?pageSize=100')
+      .expect(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.meta.total).toBeGreaterThanOrEqual(10);
+    const dates = res.body.data.map((post: { date: string | null }) => post.date);
+    const sorted = [...dates].sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
+    expect(dates).toEqual(sorted);
+    for (const post of res.body.data) {
+      expect(post.slug).not.toMatch(/\.md$/);
+      expect(Array.isArray(post.tags)).toBe(true);
+    }
+  });
+
+  it('GET /posts?tag=IA filtra por tag do frontmatter', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/api/v1/posts?tag=IA')
+      .expect(200);
+    expect(res.body.meta.total).toBeGreaterThanOrEqual(1);
+    for (const post of res.body.data) {
+      expect(post.tags).toContain('IA');
+    }
+  });
+
+  it('GET /posts/:slug retorna o post completo com markdown', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/api/v1/posts/mcp-gupy-vagas-personalizadas-com-ia')
+      .expect(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.title).toContain('Gupy');
+    expect(res.body.data.content.length).toBeGreaterThan(500);
+    expect(res.body.data.tags).toContain('MCP');
+  });
+
+  it('GET /posts/:slug inexistente vira 404 envelope', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/api/v1/posts/nao-existe')
+      .expect(404);
+    expect(res.body.success).toBe(false);
+    expect(res.body.error.code).toBe('NOT_FOUND');
+  });
+
+  it('GET /search?contentKind=blog-post restringe aos posts', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/api/v1/search?q=Gupy&contentKind=blog-post&pageSize=10')
+      .expect(200);
+    expect(res.body.success).toBe(true);
+    for (const hit of res.body.data.hits) {
+      expect(hit.contentKind).toBe('blog-post');
+      expect(hit.path).toMatch(/^src\/content\/blog\//);
+    }
+  });
 });
 
 function fakeEmbedding(dims: number): EmbeddingProvider {

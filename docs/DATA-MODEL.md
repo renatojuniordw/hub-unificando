@@ -28,7 +28,10 @@ ORM** — only ever touched through raw SQL in `src/infra/vector/vector.sql.ts`
 | `folderPath` | String | absolute (fixtures), or **relative to `HUB_SCAN_ROOT`** as a fallback; ingestion resolves the source in three layers: absolute → knowledge lib `knowledge/<slug>` → scan root (see `project-source.ts` and ADR 0009) |
 | `stack` | Json? | `[{ name, version, role }]` from `package.json` |
 | `tags` | String[] | free-form |
-| `sourceType` | String | default `"local"` (`local` \| `git`) |
+| `sourceType` | String | default `"local"` (`local` \| `git` \| `manual` — manual = display-only registry entry, never scanned) |
+| `surfaces` | String[] | display surfaces: `unificando` \| `portfolio` \| `internal` (docs/CONTENT.md) |
+| `status` | String | default `"live"` (`live` \| `beta` \| `alpha` \| `maintenance`) |
+| `featured` | Boolean | home highlight (default false) |
 | `enabled` | Boolean | default true; disabled projects are never ingested |
 | `lastIngestedAt` | DateTime? | stamped after a clean orchestrator run |
 | `metadata` | Json? | curated extras (`workspace`, `promptCount`, ...) |
@@ -52,7 +55,10 @@ classification.
 | `category` | String | primary category slug |
 | `categories` | String[] | multi-label (up to 3) |
 | `docType` | String | default `"markdown"` (`markdown` \| `txt`) |
-| `contentKind` | String? | `README`, `AGENT-GUIDE`, `PROMPT`, `MARKDOWN`, `TEXT` |
+| `contentKind` | String? | `README`, `AGENT-GUIDE`, `PROMPT`, `MARKDOWN`, `TEXT`, `blog-post` |
+| `tags` | String[] | topic tags (blog frontmatter tags) |
+| `publishedAt` | DateTime? | blog posts: frontmatter date |
+| `isDraft` | Boolean | default false — drafts are never embedded/exposed |
 | `sourceSha` | String | sha256 of file — **dedupe key** |
 | `charCount` / `tokenEstimate` | Int / Int? | `ceil(chars / 4)` estimate |
 | `metadata` | Json? | first 10 chunk headings + path-rule extras (`promptId` for `prompts/*.md`, `workspace` for radar) |

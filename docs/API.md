@@ -39,10 +39,24 @@ Códigos de erro estáveis: `VALIDATION_ERROR`, `NOT_FOUND`, `CONFLICT`,
 
 | Endpoint | Descrição |
 |---|---|
-| `GET /projects?search=&page=&pageSize=` | lista projetos com counts (docs/chunks/decisões) |
+| `GET /projects?search=&surface=&featured=&page=&pageSize=` | lista projetos com counts (docs/chunks/decisões); `surface` = `unificando`\|`portfolio`\|`internal`, `featured=true` para destaques (docs/CONTENT.md) |
 | `GET /projects/:slug` | detalhe + lista de documentos |
 | `GET /projects/:slug/documents?category=&docType=&q=&page=&pageSize=` | documentos do projeto |
 | `GET /projects/:slug/decisions?status=` | ADRs do projeto |
+
+### Posts (blog)
+
+| Endpoint | Descrição |
+|---|---|
+| `GET /posts?tag=&project=&page=&pageSize=` | blog posts publicados (`contentKind=blog-post`), mais recentes primeiro |
+| `GET /posts/:slug` | post completo (markdown + metadados + tags + publishedAt); slug = basename sem `.md` |
+
+```bash
+curl "http://localhost:11020/api/v1/posts?tag=IA&pageSize=5"
+# data[].slug, title, summary, date, tags[], projectSlug
+curl "http://localhost:11020/api/v1/posts/mcp-gupy-vagas-personalizadas-com-ia"
+# data.{slug,title,summary,date,tags,content,readingTime,category}
+```
 
 ```bash
 curl "http://localhost:11020/api/v1/projects?search=med&pageSize=5"
@@ -71,7 +85,7 @@ curl "http://localhost:11020/api/v1/projects?search=med&pageSize=5"
 
 ### Busca híbrida
 
-`GET /search?q=&project=&category=&docType=&page=&pageSize=&strategy=`
+`GET /search?q=&project=&category=&docType=&contentKind=&page=&pageSize=&strategy=`
 
 ```bash
 curl "http://localhost:11020/api/v1/search?q=busca%20hibrida%20pgvector&project=med-unificando&pageSize=3"

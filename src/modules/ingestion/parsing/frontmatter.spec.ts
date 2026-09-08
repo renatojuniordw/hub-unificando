@@ -26,7 +26,9 @@ describe('parseFrontmatter', () => {
   });
 
   it('parses inline array tags', () => {
-    const result = parseFrontmatter('---\ntags: [IA, Segurança, "Blog, ética"]\ndate: 2026-07-16\n---\nx');
+    const result = parseFrontmatter(
+      '---\ntags: [IA, Segurança, "Blog, ética"]\ndate: 2026-07-16\n---\nx',
+    );
     expect(result.tags).toEqual(['IA', 'Segurança', 'Blog, ética']);
   });
 
@@ -60,7 +62,9 @@ describe('parseFrontmatter', () => {
 
 describe('isBlogPostFrontmatter', () => {
   it('true only when both title and date exist', () => {
-    expect(isBlogPostFrontmatter(parseFrontmatter('---\ntitle: X\ndate: 2026-01-01\n---\nx'))).toBe(true);
+    expect(isBlogPostFrontmatter(parseFrontmatter('---\ntitle: X\ndate: 2026-01-01\n---\nx'))).toBe(
+      true,
+    );
     expect(isBlogPostFrontmatter(parseFrontmatter('---\ntitle: X\n---\nx'))).toBe(false);
     expect(isBlogPostFrontmatter(parseFrontmatter('---\ndate: 2026-01-01\n---\nx'))).toBe(false);
     expect(isBlogPostFrontmatter(parseFrontmatter('# sem frontmatter'))).toBe(false);
