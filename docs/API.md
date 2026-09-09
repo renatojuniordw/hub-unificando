@@ -16,8 +16,9 @@ Toda resposta usa o envelope:
 ```
 
 Códigos de erro estáveis: `VALIDATION_ERROR`, `NOT_FOUND`, `CONFLICT`,
-`UNAUTHORIZED`, `RATE_LIMITED`, `INGESTION_NOT_ENABLED`, `MCP_ERROR`,
+`UNAUTHORIZED`, `RATE_LIMITED`, `INGESTION_NOT_ENABLED`,
 `INTERNAL_ERROR`. O servidor nunca devolve detalhes internos de erros 500.
+(`MCP_ERROR`/`NOT_FOUND` de tools MCP são um espaço à parte — ver MCP.md.)
 
 ## Rate limits (por IP, janela de 60s)
 

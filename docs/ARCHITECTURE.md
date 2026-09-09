@@ -58,7 +58,10 @@ HTTP server (port `11020`): a REST API (prefix `/api/v1`), an MCP server at
   token `ENV`), fail-fast on boot. `.env.example` documents every variable.
 - **Errors** — domain throws `NotFoundException` etc.; the global filter maps
   to stable codes (`VALIDATION_ERROR`, `NOT_FOUND`, `UNAUTHORIZED`,
-  `RATE_LIMITED`, ...).
+  `RATE_LIMITED`, ...). Tools MCP tipam erros de domínio com `McpToolError`
+  (`src/modules/mcp/mcp.errors.ts`) — ex.: documento inexistente responde
+  `code: NOT_FOUND` legível; erros inesperados continuam `MCP_ERROR`
+  genérico (nunca vazam detalhes internos).
 - **Logging** — pino (nestjs-pino), request ids, Authorization redacted.
 - **Naming** — files/folders in English (kebab-case) except MCP tool names
   which follow the ecosystem convention in PT-BR (snake_case).

@@ -42,6 +42,14 @@ EmbeddingProvider overridden** by mocks:
   mirror against mocked Prisma + tmpdir: scanned ∪ generated live set,
   pruning of stale files, dry-run, skip-without-pruning on missing source or
   failed extraction.
+- `src/modules/ingestion/orchestrator/ingestion-orchestrator.service.spec.ts`
+  — the write pipeline (previously 0% covered): happy path persists a draft,
+  embeds its chunks and upserts embeddings (module `vector.sql` mocked);
+  `sourceType: manual` projects are skipped; scope-by-slug filtering; dedupe
+  by `sourceSha` (skip) vs `force` (re-ingest); `dryRun` neither classifies
+  nor persists; `reset` purges documents/decisions before scanning; stale
+  pruning; and scan failure is recorded without persisting. Fixtures live in
+  a real `os.tmpdir()` folder.
 
 Run: `npm run test` (watch: `npm run test:watch`, coverage: `npm run test:cov`).
 
@@ -63,7 +71,8 @@ Prerequisites/behavior:
 - Asserts the documented envelope: health `ok`, `GET /projects` pagination,
   project detail counts, `404 → { success:false, error.code:NOT_FOUND }`,
   taxonomy ≥ 16, hybrid search returns scored hits, summary/compare respond,
-  and `POST /ingest/jobs` without a token is `401`.
+  `GET /projects/:slug/documents/by-path` (200 por path real + 404 para path
+  inexistente), and `POST /ingest/jobs` without a token is `401`.
 
 Run: `npm run test:e2e`.
 
