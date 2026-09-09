@@ -1,12 +1,19 @@
 import { Controller, Get, Param, Query } from '@nestjs/common';
 import { ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
-import { ListProjectDocumentsDto } from '../projects/projects.dto';
+import { GetDocumentByPathDto, ListProjectDocumentsDto } from '../projects/projects.dto';
 import { DocumentsService } from './documents.service';
 
 @ApiTags('documents')
 @Controller('projects')
 export class ProjectDocumentsController {
   constructor(private readonly documentsService: DocumentsService) {}
+
+  @Get(':slug/documents/by-path')
+  @ApiOperation({ summary: 'Get a project document by path (404 when not found)' })
+  @ApiParam({ name: 'slug', description: 'Project slug' })
+  getByPath(@Param('slug') slug: string, @Query() query: GetDocumentByPathDto) {
+    return this.documentsService.getByPathOrThrow(slug, query.path);
+  }
 
   @Get(':slug/documents')
   @ApiOperation({ summary: 'List documents of a project (filters: category, docType, q)' })

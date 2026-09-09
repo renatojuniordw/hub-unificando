@@ -42,6 +42,15 @@ export class DocumentsService {
     return this.repository.findByPath(projectSlug, path);
   }
 
+  /** Lookup by path for REST: 404 when the document does not exist. */
+  async getByPathOrThrow(projectSlug: string, path: string): Promise<Document> {
+    const document = await this.repository.findByPath(projectSlug, path);
+    if (!document) {
+      throw new NotFoundException(`Document "${path}" not found in project "${projectSlug}"`);
+    }
+    return document;
+  }
+
   async chunks(documentId: string, page: number, pageSize: number): Promise<Paginated<Chunk[]>> {
     const { items, total } = await this.repository.chunks(documentId, page, pageSize);
     return paginate(items, total, page, pageSize);

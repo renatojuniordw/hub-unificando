@@ -1,3 +1,5 @@
+import { ERROR_CODES } from '../../common/api/response';
+import { McpToolError } from './mcp.errors';
 import { jsonResult, toolError } from './result.utils';
 
 interface TextBlock {
@@ -45,6 +47,18 @@ describe('result.utils', () => {
         expect.stringContaining('consultar_decisao'),
         expect.any(String),
       );
+    });
+
+    it('devolve código e mensagem legíveis para erro tipado McpToolError (NOT_FOUND)', () => {
+      const result = toolError(
+        new McpToolError(ERROR_CODES.NOT_FOUND, 'Documento não encontrado (docs/x.md)'),
+        undefined,
+        'obter_documento',
+      );
+      const payload = JSON.parse(textOf(result)) as unknown as PayloadError;
+      expect(payload.ok).toBe(false);
+      expect(payload.error.code).toBe('NOT_FOUND');
+      expect(payload.error.message).toBe('Documento não encontrado (docs/x.md)');
     });
   });
 });

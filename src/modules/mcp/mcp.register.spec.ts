@@ -1,5 +1,8 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { NotFoundException } from '@nestjs/common';
 import type { z } from 'zod';
+import { ERROR_CODES } from '../../common/api/response';
+import { McpToolError } from './mcp.errors';
 import { registerTools } from './mcp.register';
 import type { McpToolDefinition } from './mcp.types';
 
@@ -98,5 +101,47 @@ describe('registerTools', () => {
       expect.stringContaining('ferramenta_que_falha'),
       expect.any(String),
     );
+  });
+
+  it('mantém código e mensagem de um McpToolError tipado (NOT_FOUND)', async () => {
+    const calls = register([
+      {
+        name: 'obter_documento',
+        description: 'd',
+        inputSchema: simpleSchema,
+        handler: () => {
+          throw new McpToolError(ERROR_CODES.NOT_FOUND, 'Documento não encontrado (x/y.md)');
+        },
+      },
+    ]);
+    const [, , handler] = calls[0];
+    const result = await handler({});
+    const payload = JSON.parse(result.content[0].text) as unknown as {
+      ok: false;
+      error: { code: string; message: string };
+    };
+    expect(payload.error.code).toBe('NOT_FOUND');
+    expect(payload.error.message).toBe('Documento não encontrado (x/y.md)');
+  });
+
+  it('mapeia NotFoundException do Nest para NOT_FOUND (resolução por id)', async () => {
+    const calls = register([
+      {
+        name: 'obter_documento',
+        description: 'd',
+        inputSchema: simpleSchema,
+        handler: () => {
+          throw new NotFoundException('Document "abc" not found');
+        },
+      },
+    ]);
+    const [, , handler] = calls[0];
+    const result = await handler({});
+    const payload = JSON.parse(result.content[0].text) as unknown as {
+      ok: false;
+      error: { code: string; message: string };
+    };
+    expect(payload.error.code).toBe('NOT_FOUND');
+    expect(payload.error.message).toContain('not found');
   });
 });

@@ -1,5 +1,7 @@
 import { z } from 'zod';
+import { ERROR_CODES } from '../../../common/api/response.js';
 import type { Document } from '../../../generated/prisma/client.js';
+import { McpToolError } from '../mcp.errors';
 import type { McpToolDefinition } from '../mcp.types';
 import type { McpDeps } from './mcp.deps';
 
@@ -53,18 +55,25 @@ export async function resolveDocument(
   args: { path?: string; id?: string; project?: string },
 ): Promise<Document> {
   if (args.id) {
-    const doc = await deps.documents.get(args.id);
-    return doc;
+    // documents.get lança NotFoundException quando não existe; o wrapper em
+    // mcp.register.ts mapeia para NOT_FOUND.
+    return deps.documents.get(args.id);
   }
   if (!args.path) {
+    // Validação de entrada (não é not-found) — mantém MCP_ERROR genérico.
     throw new Error('informe "path" ou "id"');
   }
   if (args.project) {
     const doc = await deps.documents.getByPath(args.project, args.path);
-    if (!doc) throw new Error(`Documento não encontrado (${args.project}/${args.path})`);
+    if (!doc)
+      throw new McpToolError(
+        ERROR_CODES.NOT_FOUND,
+        `Documento não encontrado (${args.project}/${args.path})`,
+      );
     return doc;
   }
   const found = await deps.prisma.document.findFirst({ where: { path: args.path } });
-  if (!found) throw new Error(`Documento não encontrado (path="${args.path}")`);
+  if (!found)
+    throw new McpToolError(ERROR_CODES.NOT_FOUND, `Documento não encontrado (path="${args.path}")`);
   return found;
 }

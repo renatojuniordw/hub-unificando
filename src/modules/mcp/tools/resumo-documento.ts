@@ -20,10 +20,8 @@ export function resumoDocumento(deps: McpDeps): McpToolDefinition<typeof schema>
       'Resumo contextual de um documento: título, categoria, headings (sumário) e prévia do conteúdo.',
     inputSchema: schema,
     handler: async ({ path, id }) => {
+      // resolveDocument já lança erro tipado NOT_FOUND quando não encontra.
       const doc = await resolveDocument(deps, { path, id });
-      if (!doc) {
-        throw new Error(`Documento não encontrado (path="${path ?? ''}" id="${id ?? ''}")`);
-      }
       const chunks = await deps.prisma.chunk.findMany({
         where: { documentId: doc.id },
         orderBy: { index: 'asc' },

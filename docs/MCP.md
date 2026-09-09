@@ -41,9 +41,12 @@ Toda resposta HTTP do `/mcp` leva o header `mcp-protocol-version: 2025-06-18`
 > página. Para navegar além de `topK` resultados usa-se a REST (`/search`).
 
 Formato de resposta de toda tool: content block de texto com JSON
-`{ "ok": true, "data": ... }` ou `{ "ok": false, "error": { "code", "message" } }`
-(erros de execução são genéricos; detalhes vão ao log — com o nome da tool e
-o stack, para diagnóstico).
+`{ "ok": true, "data": ... }` ou `{ "ok": false, "error": { "code", "message" } }`.
+Erros de domínio tipados (ex.: documento inexistente em `obter_documento`/
+`resumo_documento`) mantêm o código e a mensagem legíveis ao cliente
+(`code: "NOT_FOUND"`, ex. `"Documento não encontrado (med-unificando/docs/x.md)"`);
+erros inesperados continuam genéricos (`code: "MCP_ERROR"`, mensagem fixa), com
+o detalhe real (nome da tool e stack) apenas no log interno.
 
 Tools que listam coleções (`listar_projetos`, `listar_documentos`,
 `consultar_decisao`) devolvem paginação no `data`:

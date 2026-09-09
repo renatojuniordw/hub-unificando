@@ -1,4 +1,4 @@
-import { ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsOptional, IsString, MaxLength } from 'class-validator';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 
@@ -51,4 +51,11 @@ export class ListProjectDecisionsDto extends PaginationDto {
   @IsOptional()
   @IsString()
   status?: string;
+}
+
+export class GetDocumentByPathDto {
+  @ApiProperty({ description: 'Path relative to the project folder (ex: docs/ARCHITECTURE.md)' })
+  @IsString()
+  @MaxLength(500)
+  path!: string;
 }

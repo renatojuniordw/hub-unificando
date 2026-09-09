@@ -208,6 +208,26 @@ describe('hub-unificando API (e2e)', () => {
       expect(hit.path).toMatch(/^src\/content\/blog\//);
     }
   });
+
+  it('GET /projects/:slug/documents/by-path?path= retorna o documento por path', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/api/v1/projects/med-unificando/documents/by-path')
+      .query({ path: 'docs/DATABASE.md' })
+      .expect(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.path).toBe('docs/DATABASE.md');
+    expect(res.body.data.projectSlug).toBe('med-unificando');
+    expect(res.body.data.title).toBeDefined();
+  });
+
+  it('GET /projects/:slug/documents/by-path 404 quando o path não existe', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/api/v1/projects/med-unificando/documents/by-path')
+      .query({ path: 'docs/nao-existe.md' })
+      .expect(404);
+    expect(res.body.success).toBe(false);
+    expect(res.body.error.code).toBe('NOT_FOUND');
+  });
 });
 
 function fakeEmbedding(dims: number): EmbeddingProvider {

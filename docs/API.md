@@ -78,6 +78,14 @@ curl "http://localhost:11020/api/v1/projects?search=med&pageSize=5"
 |---|---|
 | `GET /documents/:id` | documento + summary + categorias + contagem de chunks |
 | `GET /documents/:id/chunks?page=&pageSize=` | trechos paginados (sem embedding) |
+| `GET /projects/:slug/documents/by-path?path=` | documento por path relativo (404 `NOT_FOUND` se não existir) — ver curl abaixo |
+
+```bash
+curl "http://localhost:11020/api/v1/projects/med-unificando/documents/by-path?path=docs%2FDATABASE.md"
+# → { "success": true, "data": { "id": "...", "path": "docs/DATABASE.md", ... } }
+curl "http://localhost:11020/api/v1/projects/med-unificando/documents/by-path?path=docs%2Fnao-existe.md"
+# → 404 { "success": false, "error": { "code": "NOT_FOUND", "message": "Document \"docs/nao-existe.md\" not found in project \"med-unificando\"" } }
+```
 
 ### Taxonomia
 

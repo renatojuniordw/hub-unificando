@@ -31,8 +31,10 @@ Build on:
 - **PostgreSQL 16 + pgvector** (`pgvector/pgvector:pg16`) as the single source
   of truth — no secondary document store.
 - **Redis** (`redis:7-alpine`, ioredis) for two orthogonal needs: the
-  **BullMQ** ingestion queue (`@nestjs/bullmq` `^11.0.5`, `bullmq` `^6.3.4`)
-  and an optional short-TTL search cache.
+  **BullMQ** ingestion queue (`bullmq` `^6.3.4` used directly — the Nest
+  wrapper `@nestjs/bullmq` was removed in 2026-09 as dead: 0 imports, the
+  queue is composed manually in `src/modules/ingestion/queue/`, the same
+  pattern as ADR 0005) and an optional short-TTL search cache.
 
 ## Alternatives considered
 
