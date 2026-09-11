@@ -23,13 +23,13 @@ Desenvolvedor resolve repetição com composição. E composição no terminal t
 Em vez de um chat que guarda estado, o contrato é simples: **texto entra, texto sai, no stdout**. Um CLI recebe sua ideia crua, monta o prompt de Engenheiro de Prompt em cima dela e imprime o resultado — pronto para ser pipado para qualquer CLI de LLM.
 
 ```bash
-npx promptcraft-unificando "quero um prompt pra gerar resumo de reunião" | claude
+npx @unificando/refina "quero um prompt pra gerar resumo de reunião" | claude
 ```
 
 O mesmo vale para o Gemini CLI:
 
 ```bash
-npx promptcraft-unificando "gera os testes unitários dessa função de pagamento" | gemini
+npx @unificando/refina "gera os testes unitários dessa função de pagamento" | gemini
 ```
 
 Sem instalação, sem configuração, sem sair do terminal. O pacote só imprime texto no stdout — quem interpreta esse texto é o LLM de destino.
@@ -39,7 +39,7 @@ Sem instalação, sem configuração, sem sair do terminal. O pacote só imprime
 Prompt solto funciona para ideias gerais. Mas quando o prompt depende do código que está na sua frente, o CLI aceita um modo de projeto:
 
 ```bash
-npx promptcraft-unificando --project "refatora esse componente seguindo o padrão do repositório"
+npx @unificando/refina --project "refatora esse componente seguindo o padrão do repositório"
 ```
 
 Com `--project`, o template ativa um bloco `<arquitetura>` que instrui o LLM de destino a explorar a arquitetura do projeto atual antes de gerar o prompt. O contexto certo chega junto com a instrução, sem você precisar colar árvore de diretórios na mão.
@@ -49,7 +49,7 @@ Com `--project`, o template ativa um bloco `<arquitetura>` que instrui o LLM de 
 Nem sempre você quer executar na hora. O modo `--save` inverte o fluxo: em vez de gerar, ele lê o stdin e salva o resultado como `.md` no diretório atual.
 
 ```bash
-npx promptcraft-unificando --save --title "resumo-de-reuniao"
+npx @unificando/refina --save --title "resumo-de-reuniao"
 # cola o texto que o LLM de destino gerou, Ctrl+D pra confirmar
 ```
 
@@ -80,15 +80,15 @@ Para qualquer CLI ou chat web, o fallback universal continua funcionando — o c
 
 ```bash
 # prompt solto
-npx promptcraft-unificando "sua ideia crua" | claude
+npx @unificando/refina "sua ideia crua" | claude
 
 # com contexto de arquitetura
-npx promptcraft-unificando --project "sua ideia" | gemini
+npx @unificando/refina --project "sua ideia" | gemini
 
 # salvando como artefato
-npx promptcraft-unificando --save --title "meu-prompt"
+npx @unificando/refina --save --title "meu-prompt"
 ```
 
-Publicado no npm, sem dependências, licença MIT. O código está no [GitHub](https://github.com/renatojuniordw/promptcraft-unificando), o pacote no [npm](https://www.npmjs.com/package/promptcraft-unificando), e o case completo com a arquitetura está no [portfólio](/projetos/promptcraft-unificando).
+Publicado no npm, sem dependências, licença MIT. O código está no [GitHub](https://github.com/Unificando/refina), o pacote no [npm](https://www.npmjs.com/package/@unificando/refina), e o case completo com a arquitetura está no [portfólio](/projetos/refina).
 
 Se o seu fluxo é conversacional e você prefere o chat, o método do post anterior continua valendo — a diferença é que agora você tem a opção de não sair do terminal.
