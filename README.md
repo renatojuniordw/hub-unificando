@@ -6,7 +6,7 @@ arquitetura e busca semântica) com **REST API oficial + Servidor MCP + CLI**.
 
 Ela indexa os projetos irmãos (`ui-unificando`, `med-unificando`,
 `pdf-unificando`, `radar-unificando`, `radar-unificando-extension`,
-`prompts-unificando`, `promptcraft-unificando`) e expõe esse conhecimento de
+`prompts`, `refina`) e expõe esse conhecimento de
 forma pronta para humanos, agentes e LLMs.
 
 ## O que ela faz

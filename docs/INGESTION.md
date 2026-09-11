@@ -81,7 +81,7 @@ mapped projects `hub sync-docs` additionally **extracts** every
 - Generated files join the live set: they are written, pruned when the
   prompt disappears from the source, and counted as `filesGenerated` in the
   sync result. Projects whose prompts are already `.md` under a root
-  `prompts/` folder (prompts-unificando, promptcraft-unificando) need no
+  `prompts/` folder (prompts, refina) need no
   mapping — the scanner mirrors them directly.
 
 ## Scanner rules

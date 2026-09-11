@@ -19,7 +19,7 @@ O site separa **conteúdo** (dados) de **apresentação** (componentes). Texto, 
 | Áreas de P&D (4 itens) | `src/data/capabilities.ts` → `LAB_PD_AREAS` | `src/pages/Laboratory.tsx` |
 | Módulos de Soluções | `src/data/capabilities.ts` → `SOLUTIONS_MODULES` | `src/features/home/components/SolutionsSection.tsx` |
 | Projetos (ProjectCard da Home) | `src/features/home/components/ProjectsSection.tsx` (ou `ProjectCard` — ver seção 4) | `src/pages/Home.tsx` |
-| DevTools npm (`prompts-unificando`, `promptcraft-unificando`) | `src/constants/devtools.ts` → `DEVTOOLS` | `src/features/home/components/DevToolsSection.tsx` |
+| DevTools npm (`@unificando/prompts`, `@unificando/refina`) | `src/constants/devtools.ts` → `DEVTOOLS` | `src/features/home/components/DevToolsSection.tsx` |
 | Servidores abertos (`MCP Med Unificando`) | `src/constants/devtools.ts` → `OPEN_SERVERS` | `DevToolsSection` |
 | WhatsApp / Instagram (número, handles) | `src/constants/social.ts` → `CONTACT_INFO`, `SOCIAL_LINKS` | Header? Footer, WhatsAppFloating, ContactForm, LinksPage |
 | Overlay de ruído (textura) | `src/constants/backgrounds.ts` → `NOISE_BACKGROUND` | Hero, CTA, Laboratory |
@@ -46,7 +46,7 @@ Os comentários do arquivo reforçam: "Laboratory, Home e Solutions consomem est
 
 ### `src/constants/devtools.ts`
 
-- `DEVTOOLS: ProjectCardData[]` — cards dos pacotes npm (`prompts-unificando`, `promptcraft-unificando`) com `status: "No ar"`, `statusColor: "bg-green-500"`, link e tags.
+- `DEVTOOLS: ProjectCardData[]` — cards dos pacotes npm (`@unificando/prompts`, `@unificando/refina`) com `status: "No ar"`, `statusColor: "bg-green-500"`, link e tags.
 - `OPEN_SERVERS: ProjectCardData[]` — `MCP Med Unificando` (link `https://med.unificando.com.br/mcp`).
 - O tipo `ProjectCardData` vem de `src/features/home/components/ProjectCard.tsx`.
 
@@ -83,8 +83,8 @@ Os **ProjectCards** da Home (ex.: "PDF Unificando", "Med Unificando", "Radar Uni
 
 ### DevTools (npm)
 
-- `prompts-unificando` — biblioteca de prompts padronizados (auditoria, refatoração, testes, LGPD, SEO), via `npx`, agnóstica de stack/LLM.
-- `promptcraft-unificando` — CLI que transforma ideias cruas em prompts de engenharia, com pipe para Claude Code e Gemini CLI.
+- `@unificando/prompts` — biblioteca de prompts padronizados (auditoria, refatoração, testes, LGPD, SEO), via `npx`, agnóstica de stack/LLM.
+- `@unificando/refina` — CLI que transforma ideias cruas em prompts de engenharia, com pipe para Claude Code e Gemini CLI.
 
 ### Contatos
 

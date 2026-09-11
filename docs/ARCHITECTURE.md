@@ -92,8 +92,8 @@ Global modules: `EnvModule`, `PrismaModule`, `RedisModule`.
 | pdf-unificando | `pdf-unificando` | ferramentas de PDF |
 | radar-unificando | `radar/radar-unificando` | app de vagas (workspace `radar`) |
 | radar-unificando-extension | `radar/radar-unificando-extension` | extensão Chrome (workspace `radar`) |
-| prompts-unificando | `SITE_HIGH_CONVERSION_ARQUITETURA` | biblioteca de prompts |
-| promptcraft-unificando | `unificando-promptgen` | CLI gerador de prompts |
+| prompts | `SITE_HIGH_CONVERSION_ARQUITETURA` | biblioteca de prompts (@unificando/prompts) |
+| refina | `unificando-promptgen` | CLI gerador de prompts (@unificando/refina) |
 
 `HUB_SCAN_ROOT` aponta para a pasta-pai com esses projetos e o
 `RegistryScanService` também descobre novos projetos (metadata apenas). A

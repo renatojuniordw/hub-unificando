@@ -161,12 +161,12 @@ export const REGISTRY_SEEDS: ProjectSeed[] = [
     metadata: { kind: 'chrome-extension', workspace: 'radar' },
   },
   {
-    slug: 'prompts-unificando',
+    slug: 'prompts',
     name: 'Prompts Unificando',
     description:
       'Library of standardized, LLM/stack-agnostic prompts (13) for auditing, refactoring, ' +
-      'testing, security/LGPD and copy review, consumed via npx.',
-    repoUrl: 'git+https://github.com/renatojuniordw/prompts-unificando.git',
+      'testing, security/LGPD and copy review, consumed via npx. Published as @unificando/prompts.',
+    repoUrl: 'git+https://github.com/Unificando/prompts.git',
     folderPath: 'SITE_HIGH_CONVERSION_ARQUITETURA',
     stack: [],
     tags: ['prompts', 'cli', 'llm', 'library'],
@@ -174,12 +174,12 @@ export const REGISTRY_SEEDS: ProjectSeed[] = [
     metadata: { kind: 'cli-package', promptCount: 13 },
   },
   {
-    slug: 'promptcraft-unificando',
-    name: 'Promptcraft Unificando',
+    slug: 'refina',
+    name: 'Refina Unificando',
     description:
       'One-step prompt-refining CLI: builds an engineering meta-prompt and delegates execution ' +
-      'to a local LLM CLI (claude/gemini/opencode), with --raw for the raw meta-prompt.',
-    repoUrl: 'git+https://github.com/renatojuniordw/promptcraft-unificando.git',
+      'to a local LLM CLI (claude/gemini/opencode), with --raw for the raw meta-prompt. Published as @unificando/refina.',
+    repoUrl: 'git+https://github.com/Unificando/refina.git',
     folderPath: 'unificando-promptgen',
     stack: [],
     tags: ['cli', 'prompts', 'llm', 'meta-prompt'],
@@ -321,8 +321,8 @@ const PORTFOLIO_LAB_SLUGS = new Set([
   'radar-unificando',
   'pdf-unificando',
   'med-unificando',
-  'prompts-unificando',
-  'promptcraft-unificando',
+  'prompts',
+  'refina',
 ]);
 
 /** Home highlights on the portfolio/landing (pdf, med, radar). */

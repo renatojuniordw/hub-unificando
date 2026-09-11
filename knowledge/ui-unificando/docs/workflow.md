@@ -36,12 +36,12 @@ Estado em 2026-09-05: todos verdes. Mantenha assim — qualquer PR/edição que 
 
 ---
 
-## 4. Contratos de Automação (`prompts-unificando`)
+## 4. Contratos de Automação (`@unificando/prompts`)
 
 Renato mantém uma CLI própria de prompts de workflow:
 
 ```bash
-npx prompts-unificando get <nome>
+npx @unificando/prompts get <nome>
 ```
 
 Exemplos de contratos já usados neste repositório:
@@ -57,7 +57,7 @@ Regras comuns dos contratos (a autoridade é o output do comando):
 - Execuções autônomas rodam o pipeline inteiro sem pausar e aplicam todas as correções (preferência registrada do usuário).
 - **Verificação adversarial independente** é obrigatória ao fim (veredito PASS/FAIL com comandos reproduzíveis).
 
-> Uso: quando um contrato for citado, buscar o conteúdo via `npx prompts-unificando get <nome>` antes de agir.
+> Uso: quando um contrato for citado, buscar o conteúdo via `npx @unificando/prompts get <nome>` antes de agir.
 
 ---
 

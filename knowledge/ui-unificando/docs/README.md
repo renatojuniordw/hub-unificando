@@ -14,7 +14,7 @@ Tecnologias: React 19 · TypeScript 5.8 (strict) · Vite 6 · Tailwind CSS v4 (C
 | [`build-and-deploy.md`](./build-and-deploy.md) | Requisitos, scripts, configs (vite/tsconfig/postcss/eslint), build, Docker, nginx, variáveis de ambiente |
 | [`testing.md`](./testing.md) | Runner nativo `node --test`, arquivos de teste, cobertura e como adicionar testes |
 | [`data-and-content.md`](./data-and-content.md) | Onde editar cada conteúdo (capacidades, devtools, social, produtos, contatos) |
-| [`workflow.md`](./workflow.md) | Gates de qualidade, convenções de git, contratos `prompts-unificando`, `.refactor/`, backlog |
+| [`workflow.md`](./workflow.md) | Gates de qualidade, convenções de git, contratos `@unificando/prompts`, `.refactor/`, backlog |
 
 ## Convenções
 

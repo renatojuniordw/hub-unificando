@@ -1,7 +1,7 @@
 # AGENTS.md — hub-unificando
 
 Guia de trabalho para agentes de IA que desenvolvem neste repositório.
-Padrões de comportamento destilados da biblioteca `prompts-unificando`
+Padrões de comportamento destilados da biblioteca `@unificando/prompts`
 (regras dos prompts `refatoracao-faseada`, `testes`, `testes-e2e`), aplicados
 ao contexto real deste projeto.
 
@@ -12,7 +12,7 @@ ao contexto real deste projeto.
 **Unificando Knowledge Platform** — plataforma de conhecimento do ecossistema
 Unificando: REST API oficial + Servidor MCP + CLI. Indexa os projetos irmãos
 (`ui-unificando`, `med-unificando`, `pdf-unificando`, `radar-unificando`,
-`prompts-unificando`, etc.) em `knowledge/<slug>` e expõe esse conhecimento
+`prompts`, `refina`, etc.) em `knowledge/<slug>` e expõe esse conhecimento
 para humanos, agentes e LLMs.
 
 **Stack:** NestJS 11 · Node ≥ 22 · PostgreSQL 16 + pgvector · Prisma 7
@@ -204,13 +204,13 @@ Particularidades que quebram com frequência:
 
 ## Guia dos prompts
 
-A biblioteca `prompts-unificando` continua sendo a fonte para **tarefas
+A biblioteca `@unificando/prompts` continua sendo a fonte para **tarefas
 episódicas** (auditoria, refatoração faseada, cobertura, E2E, copy), quando o
 usuário pedir explicitamente:
 
 ```bash
-npx prompts-unificando list
-npx prompts-unificando get <id>       # ex.: refatoracao-faseada, testes
+npx @unificando/prompts list
+npx @unificando/prompts get <id>       # ex.: refatoracao-faseada, testes
 ```
 
 As regras acima são o que vale para todo o desenvolvimento diário; o
